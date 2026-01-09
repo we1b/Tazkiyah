@@ -18,11 +18,14 @@ let currentDate = new Date();
 let prayerTimes = null; 
 let adhanAudio = new Audio('https://www.islamcan.com/audio/adhan/azan2.mp3'); 
 let adhanEnabled = true;
+let adhkarEnabled = true;
 let currentAdhkarEditIndex = null; 
 
 let quranAudio = new Audio();
 let currentSurahAyahs = [];
 let currentAyahIndex = 0;
+let verseRepeatCount = 1;
+let currentVerseRepeat = 0;
 let isPlaying = false;
 let currentReciterId = "ar.yasseraldossari"; 
 
@@ -54,7 +57,12 @@ const DEFAULT_USER_DATA = {
     customAdhkar: [] 
 };
 
-// ... Init ...
+const MESSAGES_DB = {
+    high: { title: "همة عالية! 🌟", body: "أداء ممتاز. استمر يا بطل.", link: "https://www.youtube.com/results?search_query=الشيخ+ياسر+الدوسري+الثبات" },
+    medium: { title: "أحسنت ✨", body: "واصل المسير، أنت تقترب.", link: "https://www.youtube.com/results?search_query=الشيخ+ياسر+الدوسري+الهمة" },
+    low: { title: "لا تيأس 🌿", body: "بداية جديدة. استعن بالله.", link: "https://www.youtube.com/results?search_query=الشيخ+ياسر+الدوسري+التوبة" }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
     initApp();
@@ -74,6 +82,7 @@ function initApp() {
             loadUserDataForDate(currentDate);
             initPrayerTimes(); 
             initQuranList();
+            requestNotificationPermission(); 
         } else {
             currentUser = null;
             showScreen('landing-screen');
@@ -82,20 +91,35 @@ function initApp() {
     });
 }
 
-// ... Prayer & Adhan Logic ...
+function requestNotificationPermission() {
+    if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
+}
+
+// === PRAYER TIMES ===
 function initPrayerTimes() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
             fetchPrayerTimes(pos.coords.latitude, pos.coords.longitude);
         }, () => fetchPrayerTimes(30.0444, 31.2357));
-    } else { fetchPrayerTimes(30.0444, 31.2357); }
+    } else {
+        fetchPrayerTimes(30.0444, 31.2357);
+    }
     setInterval(checkTimeForAlerts, 60000);
 }
+
 async function fetchPrayerTimes(lat, lng) {
     const date = new Date();
     const url = `https://api.aladhan.com/v1/timings/${date.getDate()}-${date.getMonth()+1}-${date.getFullYear()}?latitude=${lat}&longitude=${lng}&method=4`;
-    try { const res = await fetch(url); const data = await res.json(); if(data.code === 200) { prayerTimes = data.data.timings; updatePrayerUI(); } } catch (e) { console.error(e); }
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if(data.code === 200) {
+            prayerTimes = data.data.timings;
+            updatePrayerUI();
+        }
+    } catch (e) { console.error(e); }
 }
+
 function updatePrayerUI() {
     if (!prayerTimes) return;
     const mapping = { fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' };
@@ -110,21 +134,27 @@ function updatePrayerUI() {
         if(el) el.innerText = `${hours}:${m} ${ampm}`;
     }
 }
+
 function checkTimeForAlerts() {
-    if(!prayerTimes || !adhanEnabled) return;
+    if(!prayerTimes) return;
     const now = new Date();
     const currentH = now.getHours();
     const currentM = now.getMinutes();
-    ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
-        const [h, m] = prayerTimes[p].split(':');
-        if (parseInt(h) === currentH && parseInt(m) === currentM) {
-            adhanAudio.play().catch(()=>{});
-            if (Notification.permission === "granted") new Notification(`📢 حان موعد ${p}`);
-        }
-    });
+    
+    if(adhanEnabled) {
+        ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
+            const [h, m] = prayerTimes[p].split(':');
+            if (parseInt(h) === currentH && parseInt(m) === currentM) playAdhan(p);
+        });
+    }
 }
 
-// ... Quran Logic ...
+function playAdhan(name) {
+    adhanAudio.play().catch(()=>{});
+    if (Notification.permission === "granted") new Notification(`📢 حان موعد ${name}`);
+}
+
+// === QURAN LOGIC ===
 function initQuranList() {
     const sel = document.getElementById('reciter-select');
     if(sel) {
@@ -132,6 +162,7 @@ function initQuranList() {
         for (const [k, v] of Object.entries(RECITERS)) {
             const opt = document.createElement('option'); opt.value = k; opt.text = v; sel.appendChild(opt);
         }
+        sel.value = currentReciterId;
     }
     fetch('https://api.alquran.cloud/v1/surah').then(r=>r.json()).then(d => {
         const surahSel = document.getElementById('surah-select');
@@ -142,44 +173,61 @@ function initQuranList() {
         }
     });
     quranAudio.addEventListener('ended', () => {
-        if(currentAyahIndex < currentSurahAyahs.length - 1) playVerse(currentAyahIndex + 1);
-        else { isPlaying = false; updatePlayIcon(); }
+        if(currentVerseRepeat < verseRepeatCount - 1) {
+            currentVerseRepeat++; quranAudio.currentTime = 0; quranAudio.play();
+        } else {
+            currentVerseRepeat = 0;
+            if(currentAyahIndex < currentSurahAyahs.length - 1) playVerse(currentAyahIndex + 1);
+            else { isPlaying = false; updatePlayIcon(); }
+        }
     });
 }
+
 function changeReciter(id) { currentReciterId = id; if(currentSurahAyahs.length) playVerse(currentAyahIndex); }
+
 async function loadSurah(num) {
     if(!num) return;
     const div = document.getElementById('quran-content');
-    div.innerHTML = '<div class="text-center mt-10">جاري التحميل...</div>';
+    div.innerHTML = '<div class="text-center mt-10 text-gray-500">جاري التحميل...</div>';
+    
     try {
         const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}/${currentReciterId}`);
         const data = await res.json();
         currentSurahAyahs = data.data.ayahs;
         currentAyahIndex = 0;
+        
         let html = `<div class="max-w-2xl mx-auto text-justify" style="direction: rtl; font-size: 1.25rem; line-height: 2.2;">`;
         if(num!=1 && num!=9) html += `<div class="text-center mb-4 text-sm text-gray-500">بسم الله الرحمن الرحيم</div>`;
+        
         currentSurahAyahs.forEach((a, i) => {
             const txt = a.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '').trim();
             html += `<span id="ayah-${i}" class="cursor-pointer hover:text-green-600 transition-colors" onclick="playVerse(${i})">${txt} <span class="text-green-600 text-sm">(${a.numberInSurah})</span> </span>`;
         });
         html += `</div>`;
+        
         div.innerHTML = html;
         document.getElementById('audio-player-bar').classList.remove('hidden');
-    } catch(e) { div.innerHTML = 'حدث خطأ في التحميل'; }
+    } catch(e) { div.innerHTML = '<div class="text-center text-red-500 mt-10">حدث خطأ في التحميل، تأكد من الإنترنت</div>'; }
 }
+
 function playVerse(i) {
     if(i < 0 || i >= currentSurahAyahs.length) return;
     currentAyahIndex = i;
     const a = currentSurahAyahs[i];
     const url = a.audio || (a.audioSecondary ? a.audioSecondary[0] : null);
     if(url) {
-        quranAudio.src = url; quranAudio.play(); isPlaying = true; updatePlayIcon();
+        quranAudio.src = url;
+        quranAudio.play().catch(()=>{});
+        isPlaying = true;
+        updatePlayIcon();
+        
         document.querySelectorAll('#quran-content span').forEach(s => s.classList.remove('bg-green-100'));
         const el = document.getElementById(`ayah-${i}`);
         if(el) { el.classList.add('bg-green-100'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
         document.getElementById('player-status').innerText = `الآية ${a.numberInSurah}`;
     }
 }
+
 function togglePlay() { if(isPlaying) quranAudio.pause(); else quranAudio.play(); isPlaying = !isPlaying; updatePlayIcon(); }
 function updatePlayIcon() { const i = document.querySelector('#play-btn i'); if(i) i.setAttribute('data-lucide', isPlaying ? 'pause' : 'play'); lucide.createIcons(); }
 function nextVerse() { playVerse(currentAyahIndex + 1); }
@@ -252,7 +300,6 @@ function renderMainUI(data) {
     updatePrayerUI();
 }
 
-// ... Actions, Settings, Reports ...
 function updateDashboardStats(data) {
     let tot=0, done=0;
     if(data.prayers) Object.values(data.prayers).forEach(v=>{tot++; if(v) done++});
@@ -260,11 +307,18 @@ function updateDashboardStats(data) {
     if(data.habits) { const s = data.habitSettings || {}; for(const k in s) if(s[k]) { tot++; if(data.habits[k]) done++; } }
     const p = tot?Math.round((done/tot)*100):0;
     document.getElementById('chart-percent').innerText = p + '%';
-    // Visual bar update
     const bar = document.getElementById('progress-bar-visual');
     if(bar) bar.style.width = p + '%';
+    
+    // Message
+    let msg = MESSAGES_DB.low;
+    if(p >= 80) msg = MESSAGES_DB.high; else if(p >= 50) msg = MESSAGES_DB.medium;
+    document.getElementById('feedback-title').innerText = msg.title;
+    document.getElementById('feedback-body').innerText = msg.body;
+    document.getElementById('feedback-link').href = msg.link;
 }
 
+// ... Actions, Settings, Reports ...
 function toggleTask(cat, k, v) { if(!isToday(currentDate)) return; const did = getFormattedDateID(currentDate); const up = {}; if(cat==='root') up[k]=v; else up[`${cat}.${k}`]=v; db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did).update(up); }
 async function incrementAdhkar(i) { if(!isToday(currentDate)) return; const did = getFormattedDateID(currentDate); const ref = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did); const doc = await ref.get(); const list = doc.data().customAdhkar; list[i].count++; ref.update({ customAdhkar: list }); }
 async function removeAdhkar(i) { if(!isToday(currentDate)) return; if(!confirm('حذف؟')) return; const root = db.collection('users').doc(currentUser.uid); const rd = await root.get(); const t = rd.data().customAdhkarTemplates || []; if(t[i]) { t.splice(i,1); root.update({customAdhkarTemplates:t}); } const did = getFormattedDateID(currentDate); const ref = root.collection('daily_logs').doc(did); const d = await ref.get(); const list = d.data().customAdhkar; list.splice(i,1); ref.update({ customAdhkar: list }); }
@@ -302,7 +356,6 @@ async function generateReport(period) {
         document.getElementById('report-percent').innerText = stats.percent + "%";
         document.getElementById('report-adhkar').innerText = stats.totalAdhkar;
         
-        // Simple Summary
         summaryDiv.innerHTML = `
             <div class="space-y-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg border">
                 <p>📅 الفترة: آخر ${days} يوم</p>
