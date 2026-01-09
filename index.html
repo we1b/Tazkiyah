@@ -5,157 +5,189 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تزكية - رفيقك اليومي</title>
     
+    <!-- مكتبات التصميم والأيقونات -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- مكتبة الرسم البياني (جديد) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <link rel="stylesheet" href="style.css">
     
     <!-- مكتبات فايربيس -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-</head>
-<body class="bg-pattern min-h-screen font-cairo text-gray-800 overflow-hidden relative">
 
-    <!-- شاشة التحميل -->
+    <style>
+        /* تخصيصات إضافية */
+        body { font-family: 'Cairo', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #047857 0%, #10B981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 overflow-hidden relative">
+
+    <!-- Loader -->
     <div id="loader" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
-        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#047857]"></div>
+        <div class="w-16 h-16 border-4 border-green-100 border-t-[#047857] rounded-full animate-spin"></div>
     </div>
 
-    <!-- ================= 1. شاشة الهبوط (Landing) ================= -->
+    <!-- 1. Landing Screen -->
     <section id="landing-screen" class="absolute inset-0 bg-white z-40 overflow-y-auto hidden">
-        <nav class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+        <nav class="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
             <div class="flex items-center gap-2">
-                <i data-lucide="moon" class="text-[#D4AF37] w-8 h-8 fill-current"></i>
+                <i data-lucide="moon" class="text-yellow-500 w-8 h-8 fill-current"></i>
                 <h1 class="text-2xl font-bold text-[#047857]">تزكية</h1>
             </div>
-            <div class="flex gap-4">
-                <button onclick="goToAuth('login')" class="px-6 py-2 text-[#047857] font-bold hover:bg-green-50 rounded-xl transition-colors">دخول</button>
-                <button onclick="goToAuth('register')" class="px-6 py-2 bg-[#047857] text-white font-bold rounded-xl shadow hover:bg-[#065f46] transition-all hidden md:block">حساب جديد</button>
-            </div>
+            <button onclick="goToAuth('login')" class="px-6 py-2.5 bg-[#047857] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">ابدأ الآن</button>
         </nav>
-
-        <main class="flex flex-col items-center justify-center text-center px-4 mt-10 md:mt-20">
-            <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#ECFDF5] text-[#047857] text-sm font-bold border border-green-200 mb-8">
-                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                قليل دائم خير من كثير منقطع
-            </span>
+        <main class="flex flex-col items-center justify-center text-center px-4 mt-16 md:mt-24 pb-20">
             <h1 class="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
-                رفيقك اليومي في <br><span class="text-[#047857]">رحلة التزكية</span>
+                أصلح قلبك، <br><span class="gradient-text">يصلح الله حالك</span>
             </h1>
-            <p class="text-xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-                تطبيق يساعدك على تنظيم صلواتك ومتابعة وردك القرآني ببساطة.
-            </p>
-            <div class="flex flex-col sm:flex-row gap-4">
-                <button onclick="goToAuth('register')" class="px-8 py-4 bg-[#047857] text-white text-lg font-bold rounded-2xl shadow-xl hover:-translate-y-1 transition-all flex items-center justify-center gap-2">
-                    ابدأ رحلتك الآن <i data-lucide="arrow-left"></i>
-                </button>
-            </div>
-            
-            <!-- ميزات سريعة -->
-            <div class="grid md:grid-cols-3 gap-8 mt-20 max-w-5xl mx-auto pb-20">
-                <div class="p-6 bg-gray-50 rounded-2xl">
-                    <i data-lucide="bar-chart-2" class="w-10 h-10 text-[#047857] mx-auto mb-4"></i>
-                    <h3 class="font-bold">تقارير متابعة</h3>
-                </div>
-                <div class="p-6 bg-gray-50 rounded-2xl">
-                    <i data-lucide="map-pin" class="w-10 h-10 text-[#047857] mx-auto mb-4"></i>
-                    <h3 class="font-bold">مواقيت دقيقة</h3>
-                </div>
-                <div class="p-6 bg-gray-50 rounded-2xl">
-                    <i data-lucide="layers" class="w-10 h-10 text-[#047857] mx-auto mb-4"></i>
-                    <h3 class="font-bold">سنن مرنة</h3>
-                </div>
-            </div>
+            <p class="text-xl text-gray-500 max-w-2xl mx-auto mb-10">رفيقك الذكي لمتابعة الصلوات، الأذكار، والورد القرآني مع تقارير أداء ومحتوى إيماني مخصص لك.</p>
+            <button onclick="goToAuth('register')" class="px-10 py-4 bg-[#047857] text-white text-lg font-bold rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center gap-3">
+                أنشئ حسابك المجاني <i data-lucide="arrow-left"></i>
+            </button>
         </main>
     </section>
 
-    <!-- ================= 2. شاشة المصادقة (Auth) ================= -->
-    <section id="auth-screen" class="hidden absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-4 overflow-y-auto">
-        <button onclick="showLandingScreen()" class="absolute top-6 right-6 text-gray-400 hover:text-[#047857] flex items-center gap-1 font-bold">
-            <i data-lucide="arrow-right"></i> رجوع
-        </button>
-        
-        <div class="w-full max-w-md space-y-6">
-            <div class="text-center">
-                <h2 class="text-3xl font-bold text-[#047857]">مرحباً بك</h2>
-                <p class="mt-2 text-gray-600">سجل دخولك للمتابعة</p>
+    <!-- 2. Auth Screen -->
+    <section id="auth-screen" class="hidden absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
+        <button onclick="showLandingScreen()" class="absolute top-6 right-6 text-gray-400 hover:text-[#047857] flex items-center gap-2 font-bold transition-colors"><i data-lucide="arrow-right" class="w-5 h-5"></i> رجوع</button>
+        <div class="w-full max-w-md">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-gray-800">أهلاً بك 🌿</h2>
+                <p class="text-gray-500 mt-2">استكمل وردك اليومي</p>
             </div>
-
-            <!-- التبويبات -->
-            <div class="bg-gray-100 p-1 rounded-xl flex mb-6">
-                <button onclick="switchAuthMode('login')" id="tab-login" class="flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-white text-[#047857] shadow-sm">دخول</button>
-                <button onclick="switchAuthMode('register')" id="tab-register" class="flex-1 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 transition-all">جديد</button>
+            <div class="bg-gray-100 p-1.5 rounded-2xl flex mb-8">
+                <button onclick="switchAuthMode('login')" id="tab-login" class="flex-1 py-3 rounded-xl text-sm font-bold transition-all bg-white text-[#047857] shadow-sm">دخول</button>
+                <button onclick="switchAuthMode('register')" id="tab-register" class="flex-1 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-gray-700 transition-all">جديد</button>
             </div>
-
-            <!-- فورم الدخول -->
-            <form id="login-form" class="space-y-4 animate-fade-in" onsubmit="handleLogin(event)">
-                <input type="email" id="login-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:border-[#047857] focus:outline-none">
-                <input type="password" id="login-password" placeholder="كلمة المرور" required class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:border-[#047857] focus:outline-none">
-                <button type="submit" class="w-full py-3 rounded-xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold transition-all">دخول</button>
+            <form id="login-form" class="space-y-5 animate-fade-in" onsubmit="handleLogin(event)">
+                <input type="email" id="login-email" placeholder="البريد الإلكتروني" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] focus:ring-2 focus:ring-green-100 outline-none transition-all">
+                <input type="password" id="login-password" placeholder="كلمة المرور" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] focus:ring-2 focus:ring-green-100 outline-none transition-all">
+                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-lg transition-all transform active:scale-95">تسجيل الدخول</button>
             </form>
-
-            <!-- فورم التسجيل -->
-            <form id="register-form" class="space-y-4 hidden animate-fade-in" onsubmit="handleRegister(event)">
-                <input type="text" id="reg-name" placeholder="الاسم" required class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:border-[#047857] focus:outline-none">
-                <input type="email" id="reg-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:border-[#047857] focus:outline-none">
-                <input type="password" id="reg-password" placeholder="كلمة المرور" required class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:border-[#047857] focus:outline-none">
-                <button type="submit" class="w-full py-3 rounded-xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold transition-all">إنشاء حساب</button>
+            <form id="register-form" class="space-y-5 hidden animate-fade-in" onsubmit="handleRegister(event)">
+                <input type="text" id="reg-name" placeholder="الاسم" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
+                <input type="email" id="reg-email" placeholder="البريد الإلكتروني" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
+                <input type="password" id="reg-password" placeholder="كلمة المرور" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
+                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-lg transition-all transform active:scale-95">إنشاء حساب</button>
             </form>
-
-            <div id="auth-error" class="hidden p-3 rounded-lg bg-red-50 text-red-600 text-sm text-center border border-red-100"></div>
+            <div id="auth-error" class="hidden mt-4 p-4 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100"></div>
         </div>
     </section>
 
-    <!-- ================= 3. شاشة التطبيق (Dashboard) ================= -->
-    <div id="app-screen" class="hidden flex h-screen overflow-hidden bg-[#F3F4F6]">
-        <!-- القائمة الجانبية -->
-        <aside class="w-64 bg-white hidden md:flex flex-col border-l border-gray-200 shadow-sm z-20">
-            <div class="h-20 flex items-center justify-center border-b border-gray-100">
-                <h1 class="text-2xl font-bold text-[#047857] flex gap-2 items-center"><i data-lucide="moon" class="text-[#D4AF37] fill-current"></i> تزكية</h1>
+    <!-- 3. Dashboard Screen (محسنة) -->
+    <div id="app-screen" class="hidden flex h-screen bg-[#F3F4F6] overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-72 bg-white hidden md:flex flex-col border-l border-gray-100 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-20">
+            <div class="h-24 flex items-center justify-center border-b border-gray-50">
+                <h1 class="text-3xl font-bold text-[#047857] flex gap-3 items-center tracking-tight">
+                    <i data-lucide="moon" class="text-yellow-500 fill-current w-8 h-8"></i> تزكية
+                </h1>
             </div>
-            <div class="flex-1 p-4 space-y-2">
-                <button class="w-full flex items-center gap-3 px-4 py-3 bg-[#ECFDF5] text-[#047857] rounded-xl font-bold"><i data-lucide="layout-dashboard"></i> اليومية</button>
-            </div>
-            <div class="p-4 border-t border-gray-100">
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="w-10 h-10 rounded-full bg-[#047857] text-white flex items-center justify-center font-bold" id="user-avatar">م</div>
-                    <div class="overflow-hidden">
-                        <p class="text-sm font-bold truncate" id="user-name-display">...</p>
+            <div class="flex-1 p-6 space-y-3">
+                <button class="w-full flex items-center gap-4 px-6 py-4 bg-gradient-to-l from-green-50 to-white border-r-4 border-[#047857] text-[#047857] rounded-l-2xl font-bold shadow-sm transition-all">
+                    <i data-lucide="layout-dashboard"></i> لوحة المتابعة
+                </button>
+                <div class="mt-8 px-4">
+                    <div id="sidebar-message-box" class="p-4 bg-yellow-50 rounded-2xl border border-yellow-100 text-sm text-gray-600 leading-relaxed">
+                        <!-- رسالة متغيرة -->
+                        ... جاري التحميل
                     </div>
                 </div>
-                <button onclick="handleLogout()" class="w-full py-2 border border-red-100 text-red-500 rounded-lg hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2">
-                    <i data-lucide="log-out" class="w-4 h-4"></i> خروج
+            </div>
+            <div class="p-6 border-t border-gray-50">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-[#047857] to-[#10B981] text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-green-200" id="user-avatar">م</div>
+                    <div class="overflow-hidden">
+                        <p class="text-base font-bold text-gray-800 truncate" id="user-name-display">...</p>
+                        <p class="text-xs text-green-600 font-semibold">مشترك نشط</p>
+                    </div>
+                </div>
+                <button onclick="handleLogout()" class="w-full py-3 border-2 border-red-50 text-red-500 rounded-xl hover:bg-red-50 hover:border-red-100 text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                    <i data-lucide="log-out" class="w-4 h-4"></i> تسجيل خروج
                 </button>
             </div>
         </aside>
 
-        <!-- المحتوى -->
-        <main class="flex-1 flex flex-col h-full relative">
-            <header class="md:hidden h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-10 shrink-0">
-                <span class="font-bold text-[#047857]">تزكية</span>
-                <button onclick="handleLogout()" class="text-gray-500"><i data-lucide="log-out"></i></button>
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+            <!-- Mobile Header -->
+            <header class="md:hidden h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 z-10 shrink-0 sticky top-0">
+                <span class="font-bold text-xl text-[#047857]">تزكية</span>
+                <button onclick="handleLogout()" class="p-2 bg-red-50 text-red-500 rounded-lg"><i data-lucide="log-out" class="w-5 h-5"></i></button>
             </header>
 
-            <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 scroll-smooth">
-                <div class="mb-8">
-                    <h2 class="text-2xl font-bold text-gray-800">أهلاً بك <span id="welcome-name" class="text-[#047857]">..</span> 👋</h2>
-                    <p class="text-gray-500 text-sm mt-1">همة عالية اليوم بإذن الله 🌿</p>
-                </div>
-
-                <!-- شريط التقدم -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 relative overflow-hidden">
-                    <div class="flex justify-between items-end mb-2 relative z-10">
-                        <span class="text-gray-600 font-bold">إنجاز اليوم</span>
-                        <span class="text-2xl font-bold text-[#047857]" id="progress-text">0%</span>
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-32 scroll-smooth">
+                
+                <!-- Greeting Area -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+                    <div>
+                        <h2 class="text-3xl font-bold text-gray-800">مرحباً، <span id="welcome-name" class="gradient-text">...</span> 👋</h2>
+                        <p class="text-gray-500 mt-2">كيف هي همتك اليوم؟</p>
                     </div>
-                    <div class="w-full bg-gray-100 rounded-full h-3 relative z-10">
-                        <div id="progress-bar" class="bg-[#047857] h-3 rounded-full transition-all duration-700" style="width: 0%"></div>
+                    <!-- بطاقة التاريخ -->
+                    <div class="bg-white px-5 py-2 rounded-xl shadow-sm border border-gray-100 text-sm text-gray-600 font-medium flex items-center gap-2">
+                        <i data-lucide="calendar" class="w-4 h-4 text-[#047857]"></i>
+                        <span id="current-date">...</span>
                     </div>
                 </div>
 
-                <!-- المهام -->
-                <div id="tasks-container" class="space-y-6"></div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+                    <!-- 1. Performance Chart (جديد) -->
+                    <div class="bg-white p-6 rounded-3xl shadow-[0_5px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 lg:col-span-1 flex flex-col items-center justify-center relative overflow-hidden">
+                        <h3 class="font-bold text-gray-700 mb-4 w-full text-right">مؤشر الأداء اليومي</h3>
+                        <div class="relative w-48 h-48">
+                            <canvas id="performanceChart"></canvas>
+                            <!-- النسبة في المنتصف -->
+                            <div class="absolute inset-0 flex items-center justify-center flex-col">
+                                <span class="text-3xl font-bold text-gray-800" id="chart-percent">0%</span>
+                                <span class="text-xs text-gray-400">إنجاز</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Smart Feedback Message (جديد) -->
+                    <div class="bg-gradient-to-br from-[#047857] to-[#064E3B] p-8 rounded-3xl shadow-xl shadow-green-900/20 lg:col-span-2 text-white relative overflow-hidden flex flex-col justify-center">
+                        <!-- زخرفة -->
+                        <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+                        
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-3 mb-4 opacity-90">
+                                <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                    <i data-lucide="sparkles" class="w-5 h-5 text-yellow-300"></i>
+                                </div>
+                                <span class="text-sm font-bold tracking-wide uppercase text-green-100">رسالة اليوم لك</span>
+                            </div>
+                            
+                            <h3 id="feedback-title" class="text-2xl md:text-3xl font-bold mb-3 leading-snug">...</h3>
+                            <p id="feedback-body" class="text-green-100 leading-relaxed mb-6 max-w-xl">...</p>
+                            
+                            <a id="feedback-link" href="#" target="_blank" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#047857] rounded-xl font-bold hover:bg-green-50 transition-colors shadow-lg shadow-black/10">
+                                <i data-lucide="play-circle" class="w-5 h-5"></i> شاهد المحاضرة المقترحة
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tasks Section -->
+                <div id="tasks-container" class="space-y-8">
+                    <!-- سيتم توليد المهام هنا -->
+                </div>
+
             </div>
         </main>
     </div>

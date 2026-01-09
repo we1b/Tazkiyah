@@ -1,4 +1,4 @@
-const USE_REAL_FIREBASE = true; 
+const USE_REAL_FIREBASE = true;
 
 // إعدادات مشروعك
 const firebaseConfig = {
@@ -14,14 +14,43 @@ const firebaseConfig = {
 let auth, db;
 let currentUser = null;
 let unsubscribeSnapshot = null;
+let performanceChartInstance = null; // متغير لحفظ الرسم البياني
 
 const DEFAULT_USER_DATA = {
     prayers: { fajr: false, dhuhr: false, asr: false, maghrib: false, isha: false },
     habits: { duha: false, quran: false, azkar: false }
 };
 
+// مكتبة الرسائل والمحاضرات (الداتا بيز الخاصة بالرسائل)
+const MESSAGES_DB = {
+    high: {
+        title: "ما شاء الله، همة تناطح السحاب! 🌟",
+        body: "ثباتك اليوم يفتح لك أبواباً من الخير. استغل هذه الطاقة في المزيد من القرب. إليك هذا المقطع عن 'لذة الثبات'.",
+        link: "https://www.youtube.com/results?search_query=محاضرة+عن+الثبات+في+الطاعة", // استبدل برابط حقيقي
+        sidebar: "أداء ممتاز! استمر يا بطل 💪"
+    },
+    medium: {
+        title: "جيد جداً، ولكنك تستطيع المزيد! ✨",
+        body: "أنجزت جزءاً كبيراً، ولم يتبق إلا القليل لتكتمل اللوحة. جاهد نفسك في الباقي. استمع لهذا المقطع القصير.",
+        link: "https://www.youtube.com/results?search_query=محاضرة+علو+الهمة",
+        sidebar: "اقتربت من الكمال، شد حيلك 🚀"
+    },
+    low: {
+        title: "لا تيأس، البدايات دائماً صعبة 🌿",
+        body: "تعثرت اليوم؟ لا بأس، المهم ألا تتوقف. الله يحب المحاولين. جدد نيتك الآن واستمع لهذه الكلمات لتشحذ همتك.",
+        link: "https://www.youtube.com/results?search_query=محاضرة+عن+عدم+اليأس+من+رحمة+الله",
+        sidebar: "بداية جديدة.. استعن بالله ولا تعجز ❤️"
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    // تعيين التاريخ
+    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const today = new Date().toLocaleDateString('ar-EG', dateOptions);
+    const dateEl = document.getElementById('current-date');
+    if(dateEl) dateEl.innerText = today;
+    
     initApp();
 });
 
@@ -42,14 +71,13 @@ function initApp() {
             syncUserDataRealtime(user.uid);
         } else {
             currentUser = null;
-            // لو المستخدم مش مسجل، نظهر له صفحة الهبوط أولاً
             showScreen('landing-screen');
         }
         hideLoader();
     });
 }
 
-// === دوال التنقل (Navigation) ===
+// === Navigation ===
 
 function hideLoader() {
     const loader = document.getElementById('loader');
@@ -59,26 +87,25 @@ function hideLoader() {
     }
 }
 
-// دالة عامة لإظهار شاشة وإخفاء الباقي
 function showScreen(screenId) {
     ['landing-screen', 'auth-screen', 'app-screen'].forEach(id => {
         const el = document.getElementById(id);
         if (id === screenId) {
             el.classList.remove('hidden');
-            if (id === 'landing-screen') el.scrollTop = 0; // Reset scroll
+            if (id === 'landing-screen') el.scrollTop = 0;
+            // لو فتحنا التطبيق، لازم نهيأ الرسم البياني لو مش موجود
+            if (id === 'app-screen') setTimeout(initChart, 100); 
         } else {
             el.classList.add('hidden');
         }
     });
 }
 
-// الانتقال من الهبوط إلى الدخول
 function goToAuth(mode = 'login') {
     showScreen('auth-screen');
     switchAuthMode(mode);
 }
 
-// الرجوع للهبوط
 function showLandingScreen() {
     showScreen('landing-screen');
 }
@@ -109,7 +136,7 @@ function switchAuthMode(mode) {
     }
 }
 
-// === دوال المنطق والبيانات (Logic) ===
+// === Logic ===
 
 async function handleLogin(e) {
     e.preventDefault();
@@ -139,7 +166,7 @@ async function handleRegister(e) {
 async function handleLogout() {
     if(unsubscribeSnapshot) unsubscribeSnapshot();
     await auth.signOut();
-    showScreen('landing-screen'); // ارجع للهبوط بعد الخروج
+    showScreen('landing-screen');
 }
 
 function showAuthError(msg) {
@@ -148,14 +175,18 @@ function showAuthError(msg) {
     el.classList.remove('hidden');
 }
 
-// === مزامنة البيانات ===
+// === Realtime Data & UI ===
 
 function syncUserDataRealtime(uid) {
     unsubscribeSnapshot = db.collection('users').doc(uid).onSnapshot(doc => {
-        if (doc.exists) renderTasks(doc.data());
-        else db.collection('users').doc(uid).set(DEFAULT_USER_DATA);
+        if (doc.exists) {
+            const data = doc.data();
+            renderTasks(data);
+            updateDashboardStats(data); // تحديث الرسم البياني والرسائل
+        } else {
+            db.collection('users').doc(uid).set(DEFAULT_USER_DATA);
+        }
         
-        // تحديث الأسماء
         const name = currentUser.displayName || currentUser.email.split('@')[0];
         document.getElementById('user-name-display').innerText = name;
         document.getElementById('welcome-name').innerText = name;
@@ -169,38 +200,119 @@ function renderTasks(data) {
     
     if (!data || !data.prayers) return;
 
-    // الصلوات
-    let html = `<div><div class="flex items-center gap-2 mb-4"><div class="w-1 h-6 bg-[#047857] rounded-full"></div><h3 class="text-xl font-bold">الفرائض</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4">`;
+    // الصلوات (تصميم الكروت الجديد)
+    let html = `<div><div class="flex items-center gap-3 mb-5"><div class="w-1.5 h-8 bg-[#047857] rounded-full"></div><h3 class="text-xl font-bold text-gray-800">الفرائض والأساسيات</h3></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
+    
     const pNames = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
     for (const [k, v] of Object.entries(data.prayers)) {
-        html += `<div class="bg-white p-4 rounded-xl border ${v?'border-green-200 bg-green-50':'border-gray-200'} shadow-sm flex justify-between items-center"><div class="flex gap-3"><input type="checkbox" onchange="toggleTask('prayers','${k}',this.checked)" class="w-6 h-6 accent-[#047857]" ${v?'checked':''}> <span class="font-bold ${v?'text-[#047857]':''}">${pNames[k]}</span></div></div>`;
+        html += `
+            <div class="bg-white p-5 rounded-2xl border transition-all duration-300 hover:-translate-y-1 flex justify-between items-center group cursor-pointer ${v?'border-green-200 bg-green-50/50 shadow-sm':'border-gray-100 hover:shadow-md'}" onclick="toggleTask('prayers','${k}',${!v})">
+                <div class="flex gap-4 items-center">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center transition-colors ${v?'bg-[#047857] text-white':'bg-gray-100 text-gray-400 group-hover:bg-green-100 group-hover:text-[#047857]'}">
+                        <i data-lucide="${v?'check':'clock'}" class="w-5 h-5"></i>
+                    </div>
+                    <span class="font-bold text-lg ${v?'text-[#047857]':'text-gray-600'}">${pNames[k]}</span>
+                </div>
+                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center ${v?'border-[#047857] bg-[#047857]':'border-gray-300'}">
+                    ${v ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+                </div>
+            </div>`;
     }
     html += `</div></div>`;
 
     // السنن
-    html += `<div class="mt-8"><div class="flex items-center gap-2 mb-4"><div class="w-1 h-6 bg-[#D4AF37] rounded-full"></div><h3 class="text-xl font-bold">السنن</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4">`;
+    html += `<div class="mt-10"><div class="flex items-center gap-3 mb-5"><div class="w-1.5 h-8 bg-[#D4AF37] rounded-full"></div><h3 class="text-xl font-bold text-gray-800">النوافل والسنن</h3></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
     const hNames = { duha: 'الضحى', quran: 'ورد القرآن', azkar: 'الأذكار' };
+    const hIcons = { duha: 'sun', quran: 'book-open', azkar: 'heart' };
+    
     for (const [k, v] of Object.entries(data.habits || {})) {
-        html += `<div class="bg-white p-4 rounded-xl border ${v?'border-yellow-200 bg-yellow-50':'border-gray-200'} shadow-sm flex justify-between items-center"><div class="flex gap-3"><input type="checkbox" onchange="toggleTask('habits','${k}',this.checked)" class="w-6 h-6 accent-yellow-600" ${v?'checked':''}> <span class="font-bold ${v?'text-yellow-700':''}">${hNames[k]}</span></div></div>`;
+        html += `
+            <div class="bg-white p-5 rounded-2xl border transition-all duration-300 hover:-translate-y-1 flex justify-between items-center group cursor-pointer ${v?'border-yellow-200 bg-yellow-50/50 shadow-sm':'border-gray-100 hover:shadow-md'}" onclick="toggleTask('habits','${k}',${!v})">
+                <div class="flex gap-4 items-center">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center transition-colors ${v?'bg-yellow-500 text-white':'bg-gray-100 text-gray-400 group-hover:bg-yellow-100 group-hover:text-yellow-600'}">
+                        <i data-lucide="${hIcons[k]}" class="w-5 h-5"></i>
+                    </div>
+                    <span class="font-bold text-lg ${v?'text-yellow-700':'text-gray-600'}">${hNames[k]}</span>
+                </div>
+                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center ${v?'border-yellow-500 bg-yellow-500':'border-gray-300'}">
+                    ${v ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+                </div>
+            </div>`;
     }
     html += `</div></div>`;
 
     container.innerHTML = html;
-    calculateProgress(data);
     lucide.createIcons();
-}
-
-function calculateProgress(data) {
-    let total = 0, done = 0;
-    if (data.prayers) Object.values(data.prayers).forEach(v => { total++; if(v) done++; });
-    if (data.habits) Object.values(data.habits).forEach(v => { total++; if(v) done++; });
-    const percent = total===0 ? 0 : Math.round((done/total)*100);
-    document.getElementById('progress-bar').style.width = `${percent}%`;
-    document.getElementById('progress-text').innerText = `${percent}%`;
 }
 
 function toggleTask(cat, key, val) {
     const update = {};
     update[`${cat}.${key}`] = val;
     db.collection('users').doc(currentUser.uid).update(update);
+}
+
+// === Chart & Smart Messages Logic ===
+
+function initChart() {
+    const ctx = document.getElementById('performanceChart');
+    if(!ctx) return;
+    
+    // تدمير الرسم القديم لو موجود لمنع التداخل
+    if (performanceChartInstance) {
+        performanceChartInstance.destroy();
+    }
+
+    performanceChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['منجز', 'متبقي'],
+            datasets: [{
+                data: [0, 100],
+                backgroundColor: ['#047857', '#E5E7EB'],
+                borderWidth: 0,
+                cutout: '75%' // سمك الدائرة
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            animation: { animateScale: true, animateRotate: true }
+        }
+    });
+}
+
+function updateDashboardStats(data) {
+    let total = 0, done = 0;
+    if (data.prayers) Object.values(data.prayers).forEach(v => { total++; if(v) done++; });
+    if (data.habits) Object.values(data.habits).forEach(v => { total++; if(v) done++; });
+    
+    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+    
+    // 1. تحديث الرسم البياني
+    const percentEl = document.getElementById('chart-percent');
+    if(percentEl) percentEl.innerText = `${percent}%`;
+
+    if (performanceChartInstance) {
+        performanceChartInstance.data.datasets[0].data = [percent, 100 - percent];
+        performanceChartInstance.update();
+    }
+
+    // 2. تحديث الرسالة الذكية (Smart Feedback)
+    updateFeedbackMessage(percent);
+}
+
+function updateFeedbackMessage(percent) {
+    let msgData;
+    
+    // تحديد مستوى الأداء
+    if (percent >= 80) msgData = MESSAGES_DB.high;
+    else if (percent >= 50) msgData = MESSAGES_DB.medium;
+    else msgData = MESSAGES_DB.low;
+
+    // تحديث النصوص في الواجهة
+    document.getElementById('feedback-title').innerText = msgData.title;
+    document.getElementById('feedback-body').innerText = msgData.body;
+    document.getElementById('feedback-link').href = msgData.link;
+    document.getElementById('sidebar-message-box').innerText = msgData.sidebar;
 }
