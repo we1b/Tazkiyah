@@ -25,21 +25,21 @@ let adhanEnabled = true;
 let adhkarEnabled = true;
 let currentAdhkarEditIndex = null; 
 
-// === متغيرات المصحف (Updated Audio Source) ===
+// === متغيرات المصحف ===
 let quranAudio = new Audio();
 let currentSurahAyahs = [];
 let currentAyahIndex = 0;
 let verseRepeatCount = 1;
 let currentVerseRepeat = 0;
 let isPlaying = false;
-// استخدام روابط alquran.cloud الصوتية (CDN سريع وموثوق)
-let currentReciterId = "ar.alafasy"; // الافتراضي: العفاسي (مثال) - سنغيره للحصري
+let currentReciterId = "ar.alafasy"; 
 
 const RECITERS = {
     "ar.husary": "الشيخ محمود خليل الحصري",
     "ar.minshawi": "الشيخ محمد صديق المنشاوي",
     "ar.abdulbasit": "الشيخ عبد الباسط عبد الصمد",
-    "ar.husarymujawwad": "الشيخ الحصري (مجود)"
+    "ar.husarymujawwad": "الشيخ الحصري (مجود)",
+    "ar.yasser": "الشيخ ياسر الدوسري" // 🆕 تم الإضافة
 };
 
 const HABITS_META = {
@@ -209,7 +209,7 @@ function sendAdhkarNotification(title, body) {
     if (Notification.permission === "granted") new Notification(title, { body: body });
 }
 
-// === 2. Quran Modal (Updated with Reliable Audio API) ===
+// === 2. Quran Modal (Updated with Yasser Al-Dosari) ===
 function injectQuranModal() {
     if (document.getElementById('quran-modal')) return;
     const modal = document.createElement('div');
@@ -220,37 +220,37 @@ function injectQuranModal() {
     let reciterOptions = '';
     for (const [key, name] of Object.entries(RECITERS)) reciterOptions += `<option value="${key}">${name}</option>`;
 
+    // 📱 تحديث التصميم للموبايل: استخدام flex-wrap و gap أصغر
     modal.innerHTML = `
-        <div class="modal-content h-[95vh]">
-            <div class="p-4 border-b border-gray-100 bg-[#ECFDF5] flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-3 w-full md:w-auto">
-                    <h3 class="text-xl font-bold text-[#047857] whitespace-nowrap"><i data-lucide="book-open" class="inline w-5 h-5"></i> المصحف</h3>
-                    <select id="surah-select" class="p-2 rounded-lg border border-gray-300 text-sm flex-1 md:w-48" onchange="loadSurah(this.value)">
+        <div class="modal-content h-[95vh] flex flex-col">
+            <div class="p-3 border-b border-gray-100 bg-[#ECFDF5] flex flex-wrap gap-2 items-center justify-between">
+                <div class="flex items-center gap-2 flex-1 min-w-[140px]">
+                    <h3 class="text-lg font-bold text-[#047857] whitespace-nowrap hidden sm:block"><i data-lucide="book-open" class="inline w-4 h-4"></i> المصحف</h3>
+                    <select id="surah-select" class="p-2 rounded-lg border border-gray-300 text-xs w-full" onchange="loadSurah(this.value)">
                         <option value="">اختر السورة...</option>
                     </select>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-center">
-                    <select id="reciter-select" class="p-2 rounded-lg border border-gray-300 text-sm" onchange="changeReciter(this.value)">${reciterOptions}</select>
-                    <div class="flex items-center bg-white rounded-lg border border-gray-300 px-2">
-                        <span class="text-xs text-gray-500 pl-2">تكرار الآية:</span>
-                        <input type="number" id="repeat-count" min="1" max="100" value="1" class="w-12 p-1 text-center outline-none text-sm font-bold" onchange="verseRepeatCount = parseInt(this.value)">
+                <div class="flex items-center gap-2 shrink-0">
+                    <select id="reciter-select" class="p-2 rounded-lg border border-gray-300 text-xs max-w-[120px]" onchange="changeReciter(this.value)">${reciterOptions}</select>
+                    <div class="flex items-center bg-white rounded-lg border border-gray-300 px-1 hidden sm:flex">
+                        <span class="text-[10px] text-gray-500 pl-1">تكرار:</span>
+                        <input type="number" id="repeat-count" min="1" max="100" value="1" class="w-8 p-1 text-center outline-none text-xs font-bold" onchange="verseRepeatCount = parseInt(this.value)">
                     </div>
+                    <button onclick="closeQuran()" class="text-gray-500 hover:text-red-500 bg-white p-2 rounded-full shadow-sm"><i data-lucide="x" class="w-4 h-4"></i></button>
                 </div>
-                <button onclick="closeQuran()" class="text-gray-500 hover:text-red-500 bg-white p-2 rounded-full shadow-sm"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div id="quran-content" class="flex-1 overflow-y-auto p-6 text-center bg-[#fdfdfd] relative">
+            <div id="quran-content" class="flex-1 overflow-y-auto p-4 text-center bg-[#fdfdfd] relative">
                 <div class="flex flex-col items-center justify-center h-full text-gray-400">
-                    <i data-lucide="book" class="w-20 h-20 mb-4 opacity-30"></i><p>اختر السورة والقارئ لبدء الحفظ والمراجعة</p>
+                    <i data-lucide="book" class="w-16 h-16 mb-4 opacity-30"></i><p class="text-sm">اختر السورة والقارئ</p>
                 </div>
             </div>
-            <div id="audio-player-bar" class="p-4 bg-white border-t border-gray-200 flex justify-between items-center hidden">
-                <div class="text-xs text-gray-500 hidden md:block"><span id="player-status">جاري التحميل...</span></div>
+            <div id="audio-player-bar" class="p-3 bg-white border-t border-gray-200 flex justify-between items-center hidden">
+                <div class="text-[10px] text-gray-500 hidden sm:block"><span id="player-status">...</span></div>
                 <div class="flex items-center gap-4 mx-auto">
-                    <button onclick="prevVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-back" class="w-6 h-6"></i></button>
-                    <button onclick="togglePlay()" id="play-btn" class="w-12 h-12 bg-[#047857] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#065f46] transition-all"><i data-lucide="play" class="w-6 h-6 ml-1"></i></button>
-                    <button onclick="nextVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-forward" class="w-6 h-6"></i></button>
+                    <button onclick="prevVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-back" class="w-5 h-5"></i></button>
+                    <button onclick="togglePlay()" id="play-btn" class="w-10 h-10 bg-[#047857] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#065f46] transition-all"><i data-lucide="play" class="w-5 h-5 ml-0.5"></i></button>
+                    <button onclick="nextVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-forward" class="w-5 h-5"></i></button>
                 </div>
-                <div class="text-xs text-gray-400 font-mono hidden md:block w-24 text-left">AlQuran.Cloud</div>
             </div>
         </div>`;
     
@@ -277,56 +277,49 @@ async function fetchSurahList() {
 
 function changeReciter(reciterKey) {
     currentReciterId = reciterKey;
-    // إعادة تحميل السورة الحالية لتحديث روابط الصوت
-    const select = document.getElementById('surah-select');
-    if (select && select.value) {
-        loadSurah(select.value);
-    }
+    if (currentSurahAyahs.length > 0) playVerse(currentAyahIndex);
 }
 
-// === loadSurah Updated to fetch Audio URL directly ===
+// === loadSurah Updated ===
 async function loadSurah(number) {
     if(!number) return;
     const container = document.getElementById('quran-content');
-    container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div><p class="mt-2 text-gray-500">جاري تحميل السورة...</p></div>';
+    container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div><p class="mt-2 text-gray-500 text-sm">جاري التحميل...</p></div>';
     
     try {
-        // نطلب السورة مع ملفات الصوت الخاصة بالقارئ المختار دفعة واحدة
-        // هذا الطلب يجلب النص + روابط الصوت لكل آية
+        // نستخدم audioSecondary كخيار احتياطي لو الروابط الأساسية مش شغالة
+        // رابط الدوسري: ar.yasser
         const res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/${currentReciterId}`);
         
         if (!res.ok) throw new Error("فشل التحميل من المصدر");
         
         const data = await res.json();
-        const ayahs = data.data.ayahs; // هذه المصفوفة تحتوي الآن على audio لكل آية
+        const ayahs = data.data.ayahs;
         
-        currentSurahAyahs = ayahs; // حفظ الآيات مع روابط الصوت
+        currentSurahAyahs = ayahs;
         currentAyahIndex = 0;
         currentVerseRepeat = 0;
         
-        let html = `<div class="max-w-3xl mx-auto"><h2 class="text-3xl font-bold text-[#047857] mb-6 font-serif text-center">${data.data.name}</h2><div class="text-2xl leading-[2.5] font-serif text-gray-800 text-justify" style="direction: rtl;">`;
-        if(number != 1 && number != 9) html += `<div class="text-center mb-6 text-xl text-gray-600">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>`;
+        // 📱 تحسين عرض النص للموبايل: تقليل الهوامش وحجم الخط قليلاً
+        let html = `<div class="max-w-3xl mx-auto px-2"><h2 class="text-2xl font-bold text-[#047857] mb-4 font-serif text-center">${data.data.name}</h2><div class="text-xl sm:text-2xl leading-[2.2] font-serif text-gray-800 text-justify" style="direction: rtl;">`;
+        if(number != 1 && number != 9) html += `<div class="text-center mb-4 text-lg text-gray-600">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>`;
         
         ayahs.forEach((ayah, index) => {
-            // استخدام النص البسيط لتجنب مشاكل الرسم العثماني
             const text = ayah.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '').trim(); 
-            html += `<span id="ayah-${index}" class="ayah-span cursor-pointer hover:bg-green-50 rounded px-1 transition-colors duration-200" onclick="playVerse(${index})">${text} <span class="text-[#047857] text-xl font-sans inline-block mx-1">۝${ayah.numberInSurah}</span></span> `;
+            html += `<span id="ayah-${index}" class="ayah-span cursor-pointer hover:bg-green-50 rounded px-1 transition-colors duration-200" onclick="playVerse(${index})">${text} <span class="text-[#047857] text-lg font-sans inline-block mx-1">۝${ayah.numberInSurah}</span></span> `;
         });
         
         html += `</div></div>`;
         container.innerHTML = html;
         document.getElementById('audio-player-bar').classList.remove('hidden');
         
-        // تشغيل أول آية (اختياري)
-        // playVerse(0); 
-        
     } catch(e) { 
         console.error(e);
         container.innerHTML = `
             <div class="flex flex-col items-center justify-center h-full text-red-500">
-                <i data-lucide="wifi-off" class="w-12 h-12 mb-2"></i>
-                <p>حدث خطأ في تحميل السورة.</p>
-                <button onclick="loadSurah(${number})" class="mt-4 px-4 py-2 bg-red-100 rounded-lg hover:bg-red-200 text-red-700 font-bold">إعادة المحاولة</button>
+                <i data-lucide="wifi-off" class="w-10 h-10 mb-2"></i>
+                <p class="text-sm">حدث خطأ في تحميل السورة.</p>
+                <button onclick="loadSurah(${number})" class="mt-4 px-4 py-2 bg-red-100 rounded-lg hover:bg-red-200 text-red-700 font-bold text-sm">إعادة المحاولة</button>
             </div>`;
         lucide.createIcons();
     }
@@ -337,9 +330,9 @@ function playVerse(index) {
     currentAyahIndex = index;
     const ayah = currentSurahAyahs[index];
     
-    // الرابط الصوتي يأتي جاهزاً من الـ API الآن
-    if (ayah.audio) {
-        quranAudio.src = ayah.audio;
+    // استخدام الرابط الثانوي إذا الأول مش موجود
+    if (ayah.audio || ayah.audioSecondary && ayah.audioSecondary[0]) {
+        quranAudio.src = ayah.audio || ayah.audioSecondary[0];
         quranAudio.play().catch(e => console.log("User interaction required for audio"));
         highlightAyah(index);
         updatePlayerStatus();
@@ -394,10 +387,10 @@ function injectMobileNav() {
     nav.id = 'mobile-bottom-nav';
     nav.className = 'md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 flex justify-around items-center h-16 pb-safe';
     nav.innerHTML = `
-        <button onclick="showScreen('app-screen')" class="flex flex-col items-center justify-center w-full h-full text-[#047857]"><i data-lucide="layout-dashboard" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">يوميتي</span></button>
-        <button onclick="openQuran()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]"><i data-lucide="book-open" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">المصحف</span></button>
-        <button onclick="openReportModal()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]"><i data-lucide="bar-chart-2" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">تقارير</span></button>
-        <button onclick="openSettingsModal()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]"><i data-lucide="settings" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">إعدادات</span></button>`;
+        <button onclick="showScreen('app-screen')" class="flex flex-col items-center justify-center w-full h-full text-[#047857]"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">يوميتي</span></button>
+        <button onclick="openQuran()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]"><i data-lucide="book-open" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">المصحف</span></button>
+        <button onclick="openReportModal()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]"><i data-lucide="bar-chart-2" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">تقارير</span></button>
+        <button onclick="openSettingsModal()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]"><i data-lucide="settings" class="w-5 h-5"></i><span class="text-[9px] font-bold mt-1">إعدادات</span></button>`;
     document.body.appendChild(nav);
     lucide.createIcons();
 }
@@ -653,6 +646,7 @@ function updateDashboardStats(data) {
 }
 
 // === Report Logic (Updated for Name & Style) ===
+// 🆕 تعديل: تحسين تصميم المودال للموبايل (استخدام flex-wrap و gap أصغر)
 function openReportModal() {
     const dateStr = getReadableDate(currentDate); 
     const name = currentUser.displayName || "فاعل خير"; // استخدام الاسم أو فاعل خير
@@ -675,7 +669,13 @@ function openReportModal() {
         const activeHabits = lastUserData.habitSettings || DEFAULT_USER_DATA.habitSettings;
         for (const [k, v] of Object.entries(lastUserData.habits || {})) { if(v && activeHabits[k] && HABITS_META[k]) listEl.innerHTML += `<li class="flex items-center gap-2 text-yellow-700"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> ${HABITS_META[k].name}</li>`; }
     }
-    document.getElementById('report-modal').classList.remove('hidden');
+    
+    // 🆕 إضافة: ضبط المودال ليظهر بشكل جيد على الموبايل
+    const modal = document.getElementById('report-modal');
+    modal.classList.remove('hidden');
+    // إضافة scroll top للمودال
+    const content = modal.querySelector('.modal-content');
+    if(content) content.scrollTop = 0;
 }
 function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
 function downloadAsImage() {
