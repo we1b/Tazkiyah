@@ -83,11 +83,11 @@ function initApp() {
             showScreen('app-screen');
             currentDate = new Date();
             loadUserDataForDate(currentDate);
-            injectSettingsUI();
+            injectSettingsUI(); // سيقوم أيضاً بإضافة زر المصحف
             injectMobileNav(); 
             initPrayerTimes(); 
             injectQuranModal();
-            injectManualCountModal(); // 🆕 إضافة مودال العداد اليدوي
+            injectManualCountModal(); 
             requestNotificationPermission(); 
         } else {
             currentUser = null;
@@ -208,18 +208,21 @@ function sendAdhkarNotification(title, body) {
     if (Notification.permission === "granted") new Notification(title, { body: body });
 }
 
-// === 2. Quran Modal ===
+// === 2. Quran Modal (Updated UX: Click Outside to Close) ===
 function injectQuranModal() {
     if (document.getElementById('quran-modal')) return;
     const modal = document.createElement('div');
     modal.id = 'quran-modal';
-    modal.className = 'fixed inset-0 bg-black/80 z-[90] hidden flex flex-col items-center justify-center p-4 backdrop-blur-sm';
+    // استخدام كلاس modal-overlay الجديد
+    modal.className = 'modal-overlay hidden';
+    // إضافة حدث النقر للإغلاق
+    modal.onclick = function(e) { if(e.target === this) closeQuran(); };
     
     let reciterOptions = '';
     for (const [key, name] of Object.entries(RECITERS)) reciterOptions += `<option value="${key}">${name}</option>`;
 
     modal.innerHTML = `
-        <div class="bg-white rounded-3xl w-full max-w-5xl h-[95vh] shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
+        <div class="modal-content h-[95vh]">
             <div class="p-4 border-b border-gray-100 bg-[#ECFDF5] flex flex-col md:flex-row justify-between items-center gap-4">
                 <div class="flex items-center gap-3 w-full md:w-auto">
                     <h3 class="text-xl font-bold text-[#047857] whitespace-nowrap"><i data-lucide="book-open" class="inline w-5 h-5"></i> المصحف</h3>
@@ -284,7 +287,10 @@ async function loadSurah(number) {
     container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div></div>';
     
     try {
-        const res = await fetch(`https://api.alquran.cloud/v1/surah/${number}`);
+        // تحديث: إضافة quran-uthmani لضمان تحميل النص العثماني الصحيح
+        const res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/quran-uthmani`);
+        if (!res.ok) throw new Error("فشل التحميل من المصدر");
+        
         const data = await res.json();
         const ayahs = data.data.ayahs;
         
@@ -302,7 +308,11 @@ async function loadSurah(number) {
         container.innerHTML = html;
         document.getElementById('audio-player-bar').classList.remove('hidden');
         playVerse(0);
-    } catch(e) { container.innerHTML = "حدث خطأ في تحميل السورة"; }
+    } catch(e) { 
+        console.error(e);
+        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-red-500"><i data-lucide="wifi-off" class="w-12 h-12 mb-2"></i><p>حدث خطأ في تحميل السورة. تأكد من اتصال الإنترنت.</p></div>`;
+        lucide.createIcons();
+    }
 }
 
 function playVerse(index) {
@@ -475,9 +485,12 @@ function injectManualCountModal() {
     if (document.getElementById('manual-count-modal')) return;
     const modal = document.createElement('div');
     modal.id = 'manual-count-modal';
-    modal.className = 'fixed inset-0 bg-black/60 z-[95] hidden flex flex-col items-center justify-center p-4 backdrop-blur-sm';
+    // استخدام كلاس modal-overlay الجديد
+    modal.className = 'modal-overlay hidden';
+    modal.onclick = function(e) { if(e.target === this) document.getElementById('manual-count-modal').classList.add('hidden'); };
+    
     modal.innerHTML = `
-        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 animate-[fadeIn_0.2s_ease-out]">
+        <div class="modal-content max-w-sm p-6">
             <h3 class="text-xl font-bold text-gray-800 mb-2">إضافة عدد</h3>
             <p class="text-sm text-gray-500 mb-4">كم مرة قلت هذا الذكر؟</p>
             <input type="number" id="manual-count-input" placeholder="مثلاً: 100" class="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 mb-6 focus:border-blue-500 outline-none text-center text-lg font-bold">
@@ -525,15 +538,71 @@ async function saveManualCount() {
     document.getElementById('manual-count-modal').classList.add('hidden');
 }
 
-// === Settings Logic ===
+// === Settings & Sidebar Injection Logic (Updated for UX) ===
 function injectSettingsUI() {
     const sidebarNav = document.querySelector('aside .flex-1.space-y-3');
-    if (sidebarNav && !document.getElementById('btn-settings-sidebar')) {
-        const btn = document.createElement('button'); btn.id = 'btn-settings-sidebar'; btn.className = "w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all"; btn.innerHTML = `<i data-lucide="settings"></i> إعدادات العبادات`; btn.onclick = openSettingsModal; sidebarNav.appendChild(btn); lucide.createIcons();
+    if (sidebarNav) {
+        // زر الإعدادات
+        if (!document.getElementById('btn-settings-sidebar')) {
+            const btn = document.createElement('button'); 
+            btn.id = 'btn-settings-sidebar'; 
+            btn.className = "w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all"; 
+            btn.innerHTML = `<i data-lucide="settings"></i> إعدادات العبادات`; 
+            btn.onclick = openSettingsModal; 
+            sidebarNav.appendChild(btn); 
+        }
+        
+        // 🆕 زر المصحف (لضمان ظهوره على الكمبيوتر)
+        if (!document.getElementById('btn-quran-sidebar')) {
+            const btn = document.createElement('button');
+            btn.id = 'btn-quran-sidebar';
+            btn.className = "w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all";
+            btn.innerHTML = `<i data-lucide="book-open"></i> المصحف الإلكتروني`;
+            btn.onclick = openQuran;
+            
+            // نحاول نخليه قبل الإعدادات عشان الترتيب يكون شيك
+            const settingsBtn = document.getElementById('btn-settings-sidebar');
+            if(settingsBtn) {
+                sidebarNav.insertBefore(btn, settingsBtn);
+            } else {
+                sidebarNav.appendChild(btn);
+            }
+        }
+        lucide.createIcons();
     }
+    
     if (!document.getElementById('settings-modal')) {
-        const modal = document.createElement('div'); modal.id = 'settings-modal'; modal.className = 'fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center p-4 backdrop-blur-md';
-        modal.innerHTML = `<div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"><div class="p-6 border-b border-gray-100 flex justify-between items-center bg-[#ECFDF5]"><div><h3 class="text-xl font-bold text-[#047857]">تخصيص السنن</h3><p class="text-xs text-gray-500">تحكم فيما يظهر في يومك</p></div><button onclick="closeSettingsModal()" class="text-gray-400 hover:text-red-500"><i data-lucide="x"></i></button></div><div class="p-6 max-h-[60vh] overflow-y-auto space-y-3" id="settings-toggles-container"></div><div class="px-6 pb-2 space-y-2"><div class="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100"><div class="flex items-center gap-3"><div class="bg-white p-2 rounded-lg text-[#047857]"><i data-lucide="volume-2" class="w-5 h-5"></i></div><span class="font-bold text-gray-700">صوت الأذان</span></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" id="adhan-toggle" checked onchange="adhanEnabled = this.checked"><div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#047857]"></div></label></div><div class="flex items-center justify-between p-4 bg-yellow-50 rounded-xl border border-yellow-100"><div class="flex items-center gap-3"><div class="bg-white p-2 rounded-lg text-yellow-600"><i data-lucide="bell" class="w-5 h-5"></i></div><span class="font-bold text-gray-700">تنبيهات الأذكار (صباح/مساء)</span></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" id="adhkar-toggle" checked onchange="adhkarEnabled = this.checked"><div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div></label></div></div><div class="p-6 border-t border-gray-100 bg-gray-50 flex justify-end"><button onclick="saveSettings()" class="px-8 py-3 bg-[#047857] text-white rounded-xl font-bold hover:bg-[#065f46] shadow-lg transition-all">حفظ التغييرات</button></div></div>`;
+        const modal = document.createElement('div'); modal.id = 'settings-modal'; 
+        // تحديث كلاس المودال (Overlay)
+        modal.className = 'modal-overlay hidden';
+        // إغلاق عند الضغط خارج المودال
+        modal.onclick = function(e) { if(e.target === this) closeSettingsModal(); };
+
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-[#ECFDF5]">
+                    <div><h3 class="text-xl font-bold text-[#047857]">تخصيص السنن</h3><p class="text-xs text-gray-500">تحكم فيما يظهر في يومك</p></div>
+                    <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-red-500"><i data-lucide="x"></i></button>
+                </div>
+                <div class="p-6 max-h-[60vh] overflow-y-auto space-y-3" id="settings-toggles-container"></div>
+                <div class="px-6 pb-2 space-y-2">
+                    <div class="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
+                        <div class="flex items-center gap-3"><div class="bg-white p-2 rounded-lg text-[#047857]"><i data-lucide="volume-2" class="w-5 h-5"></i></div><span class="font-bold text-gray-700">صوت الأذان</span></div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only peer" id="adhan-toggle" checked onchange="adhanEnabled = this.checked">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#047857]"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+                        <div class="flex items-center gap-3"><div class="bg-white p-2 rounded-lg text-yellow-600"><i data-lucide="bell" class="w-5 h-5"></i></div><span class="font-bold text-gray-700">تنبيهات الأذكار (صباح/مساء)</span></div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only peer" id="adhkar-toggle" checked onchange="adhkarEnabled = this.checked">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                        </label>
+                    </div>
+                </div>
+                <div class="p-6 border-t border-gray-100 bg-gray-50 flex justify-end"><button onclick="saveSettings()" class="px-8 py-3 bg-[#047857] text-white rounded-xl font-bold hover:bg-[#065f46] shadow-lg transition-all">حفظ التغييرات</button></div>
+            </div>`;
         document.body.appendChild(modal); lucide.createIcons();
     }
 }
