@@ -3,292 +3,238 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>تزكية - رفيقك اليومي</title>
+    <title>تزكية</title>
     
-    <!-- التنسيق والأيقونات -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- مكتبات التصدير (للتقارير) -->
+    <!-- مكتبات التقارير -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <link rel="stylesheet" href="style.css">
     
-    <!-- مكتبات فايربيس (ضرورية جداً) -->
+    <!-- مكتبات فايربيس -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-</head>
-<body class="bg-gray-50 min-h-screen text-gray-800 overflow-hidden relative font-cairo">
 
-    <!-- شاشة التحميل -->
-    <div id="loader" class="fixed inset-0 bg-white z-[200] flex flex-col items-center justify-center">
+    <style>
+        body { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .click-anim:active { transform: scale(0.95); }
+        
+        /* تحسينات الموبايل */
+        @media (max-width: 640px) {
+            body { font-size: 14px; }
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+            h3 { font-size: 1.1rem; }
+            .p-5 { padding: 1rem; } /* تصغير الحواف في الكروت */
+        }
+
+        /* المودال */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px); transition: opacity 0.2s;
+        }
+        .modal-content {
+            background: white; border-radius: 1.5rem; overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            width: 100%; max-width: 32rem; margin: 1rem;
+            transform: scale(1); transition: transform 0.2s;
+            max-height: 90vh; display: flex; flex-direction: column;
+        }
+        @media (max-width: 640px) {
+            .modal-content {
+                margin: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+                position: absolute; bottom: 0; max-width: 100%; max-height: 85vh;
+                animation: slideUp 0.3s ease-out;
+            }
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* التقرير */
+        #report-preview-content {
+            background: #fff;
+            border: 4px double #047857;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 overflow-hidden relative">
+
+    <div id="loader" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
         <div class="w-12 h-12 border-4 border-green-100 border-t-[#047857] rounded-full animate-spin"></div>
-        <p class="mt-4 text-[#047857] font-bold text-sm">جاري التحميل...</p>
     </div>
 
-    <!-- 1. شاشة البداية (Landing) -->
+    <!-- 1. Landing Screen -->
     <section id="landing-screen" class="absolute inset-0 bg-white z-40 overflow-y-auto hidden">
         <nav class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-2 text-[#047857] font-bold text-xl">
-                <i data-lucide="moon" class="text-yellow-500 fill-current"></i> تزكية
+            <div class="flex items-center gap-2">
+                <i data-lucide="moon" class="text-yellow-500 w-6 h-6 fill-current"></i>
+                <h1 class="text-xl font-bold text-[#047857]">تزكية</h1>
             </div>
-            <button onclick="goToAuth('login')" class="px-5 py-2 bg-[#047857] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#065f46] transition-colors">دخول</button>
+            <button onclick="goToAuth('login')" class="px-5 py-2 bg-[#047857] text-white font-bold rounded-xl text-sm shadow-md transition-all">دخول</button>
         </nav>
-        <main class="flex flex-col items-center justify-center text-center px-6 mt-20">
-            <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+        <main class="flex flex-col items-center justify-center text-center px-4 mt-16 pb-20">
+            <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-4 leading-tight">
                 أصلح قلبك، <br><span class="text-[#047857]">يصلح الله حالك</span>
             </h1>
-            <p class="text-gray-500 mb-10 text-lg">رفيقك اليومي لمتابعة الصلوات، الأذكار، والورد القرآني.</p>
-            <button onclick="goToAuth('register')" class="px-8 py-4 bg-[#047857] text-white text-lg font-bold rounded-2xl shadow-xl flex items-center gap-2 hover:translate-y-1 transition-transform">
-                ابدأ رحلتك مجاناً <i data-lucide="arrow-left"></i>
+            <p class="text-gray-500 max-w-lg mx-auto mb-8 text-sm md:text-base">
+                رفيقك اليومي لمتابعة الصلوات، الأذكار، والورد القرآني.
+            </p>
+            <button onclick="goToAuth('register')" class="px-8 py-3.5 bg-[#047857] text-white text-base font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all flex items-center gap-2">
+                أنشئ حسابك الآن <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
         </main>
     </section>
 
-    <!-- 2. شاشة التسجيل/الدخول (Auth) -->
+    <!-- 2. Auth Screen -->
     <section id="auth-screen" class="hidden absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
-        <button onclick="showLandingScreen()" class="absolute top-6 right-6 text-gray-500 font-bold text-sm flex gap-1 items-center"><i data-lucide="arrow-right" class="w-4 h-4"></i> رجوع</button>
+        <button onclick="showLandingScreen()" class="absolute top-6 right-6 text-gray-400 hover:text-[#047857] flex items-center gap-1 font-bold text-sm"><i data-lucide="arrow-right" class="w-4 h-4"></i> رجوع</button>
         <div class="w-full max-w-sm">
-            <div class="text-center mb-8">
-                <h2 class="text-2xl font-bold text-[#047857]">مرحباً بك 👋</h2>
-                <p class="text-gray-500 text-sm">سجل دخولك للمتابعة</p>
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">أهلاً بك 🌿</h2>
+                <p class="text-gray-500 text-xs mt-1">سجل دخولك للمتابعة</p>
             </div>
-            
             <div id="auth-tabs" class="bg-gray-100 p-1 rounded-xl flex mb-6">
-                <button onclick="switchAuthMode('login')" id="tab-login" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-white text-[#047857] shadow-sm transition-all">دخول</button>
+                <button onclick="switchAuthMode('login')" id="tab-login" class="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white text-[#047857] shadow-sm">دخول</button>
                 <button onclick="switchAuthMode('register')" id="tab-register" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 transition-all">جديد</button>
             </div>
-
-            <!-- فورم الدخول -->
             <form id="login-form" class="space-y-4" onsubmit="handleLogin(event)">
-                <input type="email" id="login-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
-                <input type="password" id="login-password" placeholder="كلمة المرور" required class="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
-                <div class="flex justify-end"><button type="button" onclick="switchAuthMode('reset')" class="text-xs font-bold text-[#047857] hover:underline">نسيت كلمة المرور؟</button></div>
-                <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-sm transition-all">تسجيل الدخول</button>
+                <input type="email" id="login-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
+                <input type="password" id="login-password" placeholder="كلمة المرور" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
+                <div class="flex justify-end"><button type="button" onclick="switchAuthMode('reset')" class="text-xs font-bold text-[#047857]">نسيت كلمة المرور؟</button></div>
+                <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-[#047857] font-bold text-sm transition-all">تسجيل الدخول</button>
             </form>
-
-            <!-- فورم التسجيل -->
             <form id="register-form" class="space-y-4 hidden" onsubmit="handleRegister(event)">
-                <input type="text" id="reg-name" placeholder="الاسم" required class="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
-                <input type="email" id="reg-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
-                <input type="password" id="reg-password" placeholder="كلمة المرور" required class="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
-                <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-sm transition-all">إنشاء حساب</button>
+                <input type="text" id="reg-name" placeholder="الاسم" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
+                <input type="email" id="reg-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
+                <input type="password" id="reg-password" placeholder="كلمة المرور" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
+                <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-[#047857] font-bold text-sm transition-all">إنشاء حساب</button>
             </form>
-
-            <!-- فورم الاستعادة -->
             <form id="reset-form" class="space-y-4 hidden" onsubmit="handleResetPassword(event)">
-                <div class="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 text-center">أدخل بريدك لاستعادة كلمة المرور</div>
-                <input type="email" id="reset-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
-                <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-blue-600 hover:bg-blue-700 font-bold text-sm transition-all">إرسال الرابط</button>
-                <button type="button" onclick="switchAuthMode('login')" class="w-full py-2 text-gray-500 font-bold text-xs hover:text-gray-800">إلغاء</button>
+                <p class="text-xs text-center text-gray-500 mb-2">أدخل بريدك لاستعادة كلمة المرور</p>
+                <input type="email" id="reset-email" placeholder="البريد الإلكتروني" required class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#047857] outline-none text-sm">
+                <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-blue-600 font-bold text-sm transition-all">إرسال الرابط</button>
+                <button type="button" onclick="switchAuthMode('login')" class="w-full py-2 text-gray-500 font-bold text-xs">إلغاء</button>
             </form>
-
-            <div id="auth-message" class="hidden mt-4 p-3 rounded-lg text-xs text-center border font-bold"></div>
+            <div id="auth-error" class="hidden mt-4 p-3 rounded-lg bg-red-50 text-red-600 text-xs text-center border border-red-100"></div>
+            <div id="auth-success" class="hidden mt-4 p-3 rounded-lg bg-green-50 text-green-600 text-xs text-center border border-green-100"></div>
         </div>
     </section>
 
-    <!-- 3. لوحة التحكم (Dashboard) -->
+    <!-- 3. Dashboard Screen -->
     <div id="app-screen" class="hidden flex h-screen bg-[#F3F4F6] overflow-hidden">
-        
-        <!-- القائمة الجانبية (Desktop) -->
+        <!-- Sidebar (Desktop) -->
         <aside class="w-64 bg-white hidden md:flex flex-col border-l border-gray-100 shadow-sm z-20">
             <div class="h-20 flex items-center justify-center border-b border-gray-50">
                 <h1 class="text-2xl font-bold text-[#047857] flex gap-2 items-center"><i data-lucide="moon" class="text-yellow-500 fill-current"></i> تزكية</h1>
             </div>
-            <div class="flex-1 p-4 space-y-2 overflow-y-auto" id="sidebar-menu">
-                <button onclick="showScreen('app-screen')" class="w-full flex items-center gap-3 px-4 py-3 bg-[#ECFDF5] text-[#047857] rounded-xl font-bold transition-all"><i data-lucide="layout-dashboard"></i> اليومية</button>
-                <button onclick="toggleQuranModal()" class="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-xl font-bold transition-all"><i data-lucide="book-open"></i> المصحف</button>
-                <button onclick="openReportModal()" class="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-xl font-bold transition-all"><i data-lucide="bar-chart-2"></i> التقارير</button>
-                <button onclick="toggleSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-xl font-bold transition-all"><i data-lucide="settings"></i> الإعدادات</button>
+            <div class="flex-1 p-4 space-y-2 overflow-y-auto" id="sidebar-content">
+                <!-- أزرار القائمة -->
             </div>
-            <div class="p-4 border-t border-gray-100">
+            <div class="p-4 border-t border-gray-50">
                 <div class="flex items-center gap-3 mb-4">
-                    <div class="w-10 h-10 rounded-full bg-[#047857] text-white flex items-center justify-center font-bold text-lg" id="user-avatar">?</div>
+                    <div class="w-10 h-10 rounded-full bg-[#047857] text-white flex items-center justify-center font-bold text-lg" id="user-avatar">م</div>
                     <div class="overflow-hidden">
                         <p class="text-sm font-bold text-gray-800 truncate" id="user-name-display">...</p>
-                        <p class="text-xs text-gray-400">مشترك</p>
                     </div>
                 </div>
                 <button onclick="handleLogout()" class="w-full py-2 border border-red-100 text-red-500 rounded-lg hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><i data-lucide="log-out" class="w-4 h-4"></i> خروج</button>
             </div>
         </aside>
 
-        <!-- المحتوى الرئيسي -->
+        <!-- Main Content -->
         <main class="flex-1 flex flex-col h-full relative overflow-hidden">
-            <!-- هيدر الموبايل -->
-            <header class="md:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-10 sticky top-0 shadow-sm">
+            <header class="md:hidden h-16 bg-white/90 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 z-10 shrink-0 sticky top-0">
                 <span class="font-bold text-lg text-[#047857]">تزكية</span>
-                <button onclick="handleLogout()" class="text-red-400"><i data-lucide="log-out"></i></button>
+                <button onclick="handleLogout()" class="p-2 bg-red-50 text-red-500 rounded-lg"><i data-lucide="log-out" class="w-4 h-4"></i></button>
             </header>
 
             <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-28 scroll-smooth">
-                
-                <!-- الترحيب والتاريخ -->
+                <!-- Greeting & Date -->
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-3">
                     <div>
-                        <h2 class="text-xl font-bold text-gray-800">أهلاً، <span id="welcome-name" class="text-[#047857]">...</span> 👋</h2>
-                        <p class="text-xs text-gray-500 mt-1" id="date-status-text">همة عالية اليوم بإذن الله</p>
+                        <h2 class="text-xl md:text-2xl font-bold text-gray-800">أهلاً، <span id="welcome-name" class="text-[#047857]">...</span> 👋</h2>
+                        <div class="flex items-center gap-2 mt-1">
+                             <p class="text-xs text-gray-500" id="motivational-text">كيف هي همتك اليوم؟</p>
+                             <span class="read-only-badge px-2 py-0.5 bg-gray-200 text-gray-600 text-[10px] rounded-md font-bold hidden">أرشيف</span>
+                        </div>
                     </div>
-                    <!-- التحكم في التاريخ -->
-                    <div class="flex gap-2 items-center bg-white p-1.5 rounded-xl shadow-sm border border-gray-100 self-end">
-                        <button onclick="changeDate(-1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
-                        <div class="px-3 text-xs font-bold min-w-[100px] text-center text-[#047857]" id="current-date-display">...</div>
-                        <button onclick="changeDate(1)" id="btn-next-day" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 disabled:opacity-30"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <div class="flex gap-2 items-center bg-white p-1 rounded-lg shadow-sm border border-gray-100 self-end md:self-auto">
+                        <button onclick="changeDate(-1)" class="p-1.5 hover:bg-gray-100 rounded text-gray-600"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                        <div class="px-3 py-1 text-xs font-bold min-w-[100px] text-center"><span id="current-date-display">...</span></div>
+                        <button onclick="changeDate(1)" id="btn-next-day" class="p-1.5 hover:bg-gray-100 rounded text-gray-600"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
                     </div>
                 </div>
 
-                <!-- البطاقات العلوية -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <!-- الإنجاز -->
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center items-center relative overflow-hidden">
-                        <span class="text-xs text-gray-400 mb-1">نسبة الإنجاز</span>
-                        <span class="text-4xl font-bold text-[#047857]" id="daily-percent">0%</span>
-                        <div class="w-full bg-gray-100 h-1.5 rounded-full mt-3 overflow-hidden">
-                            <div id="progress-bar" class="h-full bg-[#047857] rounded-full transition-all duration-500" style="width: 0%"></div>
+                <!-- Charts & Stats -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col items-center justify-center relative min-h-[140px]">
+                        <div class="relative w-32 h-32">
+                            <canvas id="performanceChart"></canvas>
+                            <div class="absolute inset-0 flex items-center justify-center flex-col">
+                                <span class="text-xl font-bold text-gray-800" id="chart-percent">0%</span>
+                                <span class="text-[10px] text-gray-400">إنجاز</span>
+                            </div>
                         </div>
                     </div>
-                    
-                    <!-- الرسالة (الشيخ) -->
-                    <div class="md:col-span-2 bg-gradient-to-br from-[#047857] to-[#064E3B] p-5 rounded-2xl shadow-lg text-white flex flex-col justify-center relative overflow-hidden">
+                    <div class="bg-gradient-to-br from-[#047857] to-[#064E3B] p-5 rounded-2xl shadow-lg text-white relative overflow-hidden lg:col-span-2 flex flex-col justify-center">
                         <div class="relative z-10">
-                            <div class="flex items-center gap-2 mb-2 opacity-90 text-xs font-bold text-green-100">
-                                <i data-lucide="sparkles" class="w-3 h-3 text-yellow-300"></i> رسالة اليوم
+                            <div class="flex items-center gap-2 mb-2 opacity-90">
+                                <i data-lucide="sparkles" class="w-4 h-4 text-yellow-300"></i>
+                                <span class="text-xs font-bold text-green-100">رسالة اليوم</span>
                             </div>
-                            <h3 id="msg-title" class="font-bold text-lg mb-1">...</h3>
-                            <p id="msg-body" class="text-xs text-green-100 leading-relaxed mb-3 opacity-90 line-clamp-2">...</p>
-                            <a id="msg-link" href="#" target="_blank" class="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold backdrop-blur-sm transition-colors border border-white/20">
-                                <i data-lucide="play-circle" class="w-3 h-3"></i> استمع للشيخ
+                            <h3 id="feedback-title" class="text-lg font-bold mb-2">...</h3>
+                            <p id="feedback-body" class="text-green-100 text-xs leading-relaxed mb-4">...</p>
+                            <a id="feedback-link" href="#" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-white text-[#047857] rounded-lg font-bold text-xs hover:bg-green-50 shadow-sm">
+                                <i data-lucide="play-circle" class="w-4 h-4"></i> استمع للشيخ
                             </a>
                         </div>
-                        <i data-lucide="quote" class="absolute -left-4 -bottom-4 w-24 h-24 text-white opacity-5 rotate-12"></i>
                     </div>
                 </div>
 
-                <!-- الأذكار -->
-                <div class="mb-6">
-                    <div class="flex justify-between items-center mb-3">
-                        <div class="flex items-center gap-2"><div class="w-1 h-4 bg-blue-500 rounded-full"></div><h3 class="font-bold text-gray-800 text-sm">الأذكار 📿</h3></div>
-                        <button onclick="toggleAdhkarModal()" id="btn-add-dhikr" class="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-blue-100 transition-colors"><i data-lucide="plus" class="w-3 h-3"></i> إضافة</button>
+                <!-- Adhkar Counter -->
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2"><div class="w-1 h-5 bg-blue-600 rounded-full"></div><h3 class="text-lg font-bold text-gray-800">الأذكار 📿</h3></div>
+                        <button onclick="toggleAdhkarModal()" id="btn-add-dhikr" class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> إضافة</button>
                     </div>
                     <div id="adhkar-container" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
                 </div>
 
-                <!-- المهام (الصلوات والسنن) -->
-                <div id="tasks-container" class="space-y-4 pb-10"></div>
+                <!-- Tasks -->
+                <div id="tasks-container" class="space-y-6"></div>
             </div>
         </main>
-        
-        <!-- الشريط السفلي للموبايل -->
-        <div class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <button onclick="showScreen('app-screen')" class="flex flex-col items-center w-full text-[#047857] h-full justify-center"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] mt-1 font-bold">يوميتي</span></button>
-            <button onclick="toggleQuranModal()" class="flex flex-col items-center w-full text-gray-400 hover:text-[#047857] h-full justify-center"><i data-lucide="book-open" class="w-5 h-5"></i><span class="text-[9px] mt-1 font-bold">المصحف</span></button>
-            <button onclick="openReportModal()" class="flex flex-col items-center w-full text-gray-400 hover:text-[#047857] h-full justify-center"><i data-lucide="bar-chart-2" class="w-5 h-5"></i><span class="text-[9px] mt-1 font-bold">تقارير</span></button>
-            <button onclick="toggleSettingsModal()" class="flex flex-col items-center w-full text-gray-400 hover:text-[#047857] h-full justify-center"><i data-lucide="settings" class="w-5 h-5"></i><span class="text-[9px] mt-1 font-bold">إعدادات</span></button>
-        </div>
-
     </div>
 
-    <!-- =============== النوافذ المنبثقة (MODALS) =============== -->
-
-    <!-- 1. نافذة المصحف -->
-    <div id="quran-modal" class="modal-overlay hidden" onclick="if(event.target===this) toggleQuranModal()">
-        <div class="modal-content h-[90vh] flex flex-col w-full max-w-4xl">
-            <div class="p-3 border-b bg-[#ECFDF5] flex gap-2 items-center justify-between shrink-0">
-                <div class="flex items-center gap-2 flex-1 overflow-hidden">
-                    <i data-lucide="book" class="text-[#047857] w-5 h-5 hidden sm:block"></i>
-                    <select id="surah-select" class="p-2 rounded-lg border text-xs w-full max-w-[200px] outline-none" onchange="loadSurah(this.value)"><option>تحميل السور...</option></select>
-                </div>
-                <div class="flex items-center gap-2">
-                    <select id="reciter-select" class="p-2 rounded-lg border text-xs outline-none w-24 sm:w-auto" onchange="changeReciter(this.value)"></select>
-                    <button onclick="toggleQuranModal()" class="p-1.5 bg-white text-red-500 rounded-lg shadow-sm"><i data-lucide="x" class="w-4 h-4"></i></button>
-                </div>
-            </div>
-            <div id="quran-content" class="flex-1 overflow-y-auto p-4 text-center bg-[#fdfdfd] text-xl leading-loose font-serif relative">
-                <div class="absolute inset-0 flex items-center justify-center text-gray-400"><p>اختر السورة لبدء القراءة</p></div>
-            </div>
-            <div id="audio-bar" class="p-3 border-t bg-white flex justify-between items-center shrink-0 hidden shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
-                <span id="player-status" class="text-[10px] text-gray-500 hidden sm:block">...</span>
-                <div class="flex gap-4 mx-auto">
-                    <button onclick="prevVerse()"><i data-lucide="skip-back" class="w-5 h-5 text-gray-600"></i></button>
-                    <button onclick="togglePlay()" id="play-btn" class="w-10 h-10 bg-[#047857] text-white rounded-full flex items-center justify-center shadow-lg"><i data-lucide="play" class="w-5 h-5 ml-0.5"></i></button>
-                    <button onclick="nextVerse()"><i data-lucide="skip-forward" class="w-5 h-5 text-gray-600"></i></button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 2. نافذة الإعدادات -->
-    <div id="settings-modal" class="modal-overlay hidden" onclick="if(event.target===this) toggleSettingsModal()">
-        <div class="modal-content">
-            <div class="p-4 border-b flex justify-between items-center bg-[#ECFDF5] shrink-0">
-                <h3 class="font-bold text-[#047857]">تخصيص العبادات</h3>
-                <button onclick="toggleSettingsModal()"><i data-lucide="x" class="w-5 h-5 text-gray-500"></i></button>
-            </div>
-            <div class="p-4 overflow-y-auto flex-1 space-y-3" id="settings-list"></div>
-            <div class="p-4 border-t bg-gray-50 shrink-0">
-                <button onclick="saveSettings()" class="w-full bg-[#047857] text-white py-3 rounded-xl font-bold shadow hover:bg-[#065f46]">حفظ التغييرات</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 3. نافذة التقارير -->
-    <div id="report-modal" class="modal-overlay hidden" onclick="if(event.target===this) document.getElementById('report-modal').classList.add('hidden')">
-        <div class="modal-content max-w-4xl h-[85vh] flex-col md:flex-row">
-            <div class="w-full md:w-1/3 bg-gray-50 p-4 border-l shrink-0">
-                <div class="flex bg-gray-200 p-1 rounded-lg mb-4 text-xs">
-                    <button onclick="generateReport('day')" class="flex-1 py-2 rounded-md font-bold transition-all report-tab active-tab" data-period="day">يومي</button>
-                    <button onclick="generateReport('week')" class="flex-1 py-2 rounded-md text-gray-500 report-tab" data-period="week">أسبوعي</button>
-                    <button onclick="generateReport('month')" class="flex-1 py-2 rounded-md text-gray-500 report-tab" data-period="month">شهري</button>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-1 gap-2">
-                    <button onclick="downloadAsImage()" class="py-2 border rounded-lg text-xs flex items-center justify-center gap-2 hover:bg-blue-50 text-blue-600 border-blue-200"><i data-lucide="image" class="w-4 h-4"></i> صورة</button>
-                    <button onclick="downloadAsPDF()" class="py-2 border rounded-lg text-xs flex items-center justify-center gap-2 hover:bg-red-50 text-red-600 border-red-200"><i data-lucide="file-text" class="w-4 h-4"></i> PDF</button>
-                </div>
-            </div>
-            <div class="flex-1 p-6 bg-gray-100 overflow-y-auto flex justify-center">
-                <div id="report-preview-content" class="bg-white p-6 shadow-xl w-full max-w-sm relative min-h-[400px] flex flex-col">
-                    <div class="text-center border-b-2 border-[#047857] pb-4 mb-4">
-                        <h2 class="text-xl font-bold text-[#047857]" id="rep-title">تقرير يومي</h2>
-                        <p class="text-xs text-gray-500 mt-1" id="rep-date">...</p>
-                        <p class="text-xs font-bold text-gray-800" id="rep-user">...</p>
-                    </div>
-                    <div class="flex justify-around mb-6 text-center">
-                        <div><p class="text-xs text-gray-400">الإنجاز</p><p class="text-3xl font-bold text-[#047857]" id="rep-percent">0%</p></div>
-                        <div><p class="text-xs text-gray-400">الأذكار</p><p class="text-3xl font-bold text-blue-600" id="rep-adhkar">0</p></div>
-                    </div>
-                    <div id="rep-summary" class="mb-4 text-xs text-gray-600 bg-gray-50 p-3 rounded hidden"></div>
-                    <ul class="text-xs space-y-2 flex-1" id="rep-list"></ul>
-                    <div class="text-center mt-6 pt-4 border-t border-gray-100">
-                        <p class="text-[10px] text-gray-400">تطبيق تزكية</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 4. نافذة إضافة ذكر -->
-    <div id="adhkar-modal" class="modal-overlay hidden" onclick="if(event.target===this) toggleAdhkarModal()">
+    <!-- Modals (Hidden by default) -->
+    <!-- Adhkar Modal -->
+    <div id="adhkar-modal" class="modal-overlay hidden" onclick="if(event.target === this) toggleAdhkarModal()">
         <div class="modal-content max-w-xs p-5">
             <h3 class="text-lg font-bold text-gray-800 mb-3">ذكر جديد</h3>
-            <input type="text" id="new-dhikr-name" placeholder="اسم الذكر" class="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 mb-3 text-sm outline-none focus:border-[#047857]">
-            <input type="number" id="new-dhikr-target" placeholder="الهدف (مثلاً 100)" class="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 mb-4 text-sm outline-none focus:border-[#047857]">
-            <button onclick="addNewDhikr()" class="w-full bg-[#047857] text-white py-3 rounded-xl font-bold text-sm shadow-md">إضافة</button>
+            <input type="text" id="new-dhikr-name" placeholder="اسم الذكر" class="w-full p-2.5 bg-gray-50 rounded-lg border border-gray-200 mb-3 text-sm outline-none focus:border-blue-500">
+            <input type="number" id="new-dhikr-target" placeholder="الهدف (مثلاً 100)" class="w-full p-2.5 bg-gray-50 rounded-lg border border-gray-200 mb-4 text-sm outline-none focus:border-blue-500">
+            <button onclick="addNewDhikr()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm">إضافة</button>
         </div>
     </div>
 
-    <!-- 5. نافذة العداد اليدوي -->
-    <div id="manual-count-modal" class="modal-overlay hidden" onclick="if(event.target===this) document.getElementById('manual-count-modal').classList.add('hidden')">
+    <!-- Manual Count Modal -->
+    <div id="manual-count-modal" class="modal-overlay hidden" onclick="if(event.target === this) document.getElementById('manual-count-modal').classList.add('hidden')">
         <div class="modal-content max-w-xs p-5">
-            <h3 class="text-lg font-bold text-gray-800 mb-2">تعديل العدد</h3>
-            <input type="number" id="manual-count-input" class="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 mb-4 text-center text-2xl font-bold outline-none text-[#047857]">
-            <button onclick="saveManualCount()" class="w-full bg-[#047857] text-white py-3 rounded-xl font-bold text-sm shadow-md">حفظ</button>
+            <h3 class="text-lg font-bold text-gray-800 mb-2">إضافة عدد</h3>
+            <input type="number" id="manual-count-input" class="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 mb-4 text-center text-xl font-bold outline-none focus:border-blue-500">
+            <button onclick="saveManualCount()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm">حفظ</button>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="app.js"></script>
 </body>
 </html>
