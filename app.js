@@ -25,20 +25,21 @@ let adhanEnabled = true;
 let adhkarEnabled = true;
 let currentAdhkarEditIndex = null; 
 
-// === متغيرات المصحف ===
+// === متغيرات المصحف (Updated Audio Source) ===
 let quranAudio = new Audio();
 let currentSurahAyahs = [];
 let currentAyahIndex = 0;
 let verseRepeatCount = 1;
 let currentVerseRepeat = 0;
 let isPlaying = false;
-let currentReciterUrl = "Husary_128kbps";
+// استخدام روابط alquran.cloud الصوتية (CDN سريع وموثوق)
+let currentReciterId = "ar.alafasy"; // الافتراضي: العفاسي (مثال) - سنغيره للحصري
 
 const RECITERS = {
-    "Husary_128kbps": "الشيخ محمود خليل الحصري",
-    "Minshawy_Murattal_128kbps": "الشيخ محمد صديق المنشاوي",
-    "Abdul_Basit_Murattal_192kbps": "الشيخ عبد الباسط عبد الصمد",
-    "Mahmoud_Ali_Al_Banna_32kbps": "الشيخ محمود علي البنا"
+    "ar.husary": "الشيخ محمود خليل الحصري",
+    "ar.minshawi": "الشيخ محمد صديق المنشاوي",
+    "ar.abdulbasit": "الشيخ عبد الباسط عبد الصمد",
+    "ar.husarymujawwad": "الشيخ الحصري (مجود)"
 };
 
 const HABITS_META = {
@@ -208,14 +209,12 @@ function sendAdhkarNotification(title, body) {
     if (Notification.permission === "granted") new Notification(title, { body: body });
 }
 
-// === 2. Quran Modal (Updated UX: Click Outside to Close & Fallback) ===
+// === 2. Quran Modal (Updated with Reliable Audio API) ===
 function injectQuranModal() {
     if (document.getElementById('quran-modal')) return;
     const modal = document.createElement('div');
     modal.id = 'quran-modal';
-    // استخدام كلاس modal-overlay الجديد
     modal.className = 'modal-overlay hidden';
-    // إضافة حدث النقر للإغلاق
     modal.onclick = function(e) { if(e.target === this) closeQuran(); };
     
     let reciterOptions = '';
@@ -251,7 +250,7 @@ function injectQuranModal() {
                     <button onclick="togglePlay()" id="play-btn" class="w-12 h-12 bg-[#047857] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#065f46] transition-all"><i data-lucide="play" class="w-6 h-6 ml-1"></i></button>
                     <button onclick="nextVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-forward" class="w-6 h-6"></i></button>
                 </div>
-                <div class="text-xs text-gray-400 font-mono hidden md:block w-24 text-left">EveryAyah.com</div>
+                <div class="text-xs text-gray-400 font-mono hidden md:block w-24 text-left">AlQuran.Cloud</div>
             </div>
         </div>`;
     
@@ -277,45 +276,50 @@ async function fetchSurahList() {
 }
 
 function changeReciter(reciterKey) {
-    currentReciterUrl = reciterKey;
-    if (currentSurahAyahs.length > 0) playVerse(currentAyahIndex);
+    currentReciterId = reciterKey;
+    // إعادة تحميل السورة الحالية لتحديث روابط الصوت
+    const select = document.getElementById('surah-select');
+    if (select && select.value) {
+        loadSurah(select.value);
+    }
 }
 
-// === Updated loadSurah with Fallback ===
+// === loadSurah Updated to fetch Audio URL directly ===
 async function loadSurah(number) {
     if(!number) return;
     const container = document.getElementById('quran-content');
-    container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div></div>';
+    container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div><p class="mt-2 text-gray-500">جاري تحميل السورة...</p></div>';
     
     try {
-        // محاولة أولى: الرسم العثماني
-        let res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/quran-uthmani`);
+        // نطلب السورة مع ملفات الصوت الخاصة بالقارئ المختار دفعة واحدة
+        // هذا الطلب يجلب النص + روابط الصوت لكل آية
+        const res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/${currentReciterId}`);
         
-        // إذا فشل (مثل 404 أو خطأ خادم)، نحاول الرسم البسيط
-        if (!res.ok) {
-            console.warn("فشل تحميل الرسم العثماني، جاري محاولة الرسم البسيط...");
-            res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/quran-simple`);
-        }
-
         if (!res.ok) throw new Error("فشل التحميل من المصدر");
         
         const data = await res.json();
-        const ayahs = data.data.ayahs;
+        const ayahs = data.data.ayahs; // هذه المصفوفة تحتوي الآن على audio لكل آية
         
-        currentSurahAyahs = ayahs;
+        currentSurahAyahs = ayahs; // حفظ الآيات مع روابط الصوت
         currentAyahIndex = 0;
         currentVerseRepeat = 0;
         
-        let html = `<div class="max-w-3xl mx-auto"><h2 class="text-3xl font-bold text-[#047857] mb-6 font-serif">${data.data.name}</h2><div class="text-2xl leading-[2.5] font-serif text-gray-800 text-justify" style="direction: rtl;">`;
+        let html = `<div class="max-w-3xl mx-auto"><h2 class="text-3xl font-bold text-[#047857] mb-6 font-serif text-center">${data.data.name}</h2><div class="text-2xl leading-[2.5] font-serif text-gray-800 text-justify" style="direction: rtl;">`;
         if(number != 1 && number != 9) html += `<div class="text-center mb-6 text-xl text-gray-600">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>`;
+        
         ayahs.forEach((ayah, index) => {
+            // استخدام النص البسيط لتجنب مشاكل الرسم العثماني
             const text = ayah.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '').trim(); 
             html += `<span id="ayah-${index}" class="ayah-span cursor-pointer hover:bg-green-50 rounded px-1 transition-colors duration-200" onclick="playVerse(${index})">${text} <span class="text-[#047857] text-xl font-sans inline-block mx-1">۝${ayah.numberInSurah}</span></span> `;
         });
+        
         html += `</div></div>`;
         container.innerHTML = html;
         document.getElementById('audio-player-bar').classList.remove('hidden');
-        playVerse(0);
+        
+        // تشغيل أول آية (اختياري)
+        // playVerse(0); 
+        
     } catch(e) { 
         console.error(e);
         container.innerHTML = `
@@ -332,14 +336,16 @@ function playVerse(index) {
     if (index < 0 || index >= currentSurahAyahs.length) return;
     currentAyahIndex = index;
     const ayah = currentSurahAyahs[index];
-    const surahNum = String(ayah.surah.number).padStart(3, '0');
-    const ayahNum = String(ayah.numberInSurah).padStart(3, '0');
-    // Ensure HTTPS
-    const url = `https://www.everyayah.com/data/${currentReciterUrl}/${surahNum}${ayahNum}.mp3`;
-    quranAudio.src = url;
-    quranAudio.play().catch(e => console.log("User interaction required for audio"));
-    highlightAyah(index);
-    updatePlayerStatus();
+    
+    // الرابط الصوتي يأتي جاهزاً من الـ API الآن
+    if (ayah.audio) {
+        quranAudio.src = ayah.audio;
+        quranAudio.play().catch(e => console.log("User interaction required for audio"));
+        highlightAyah(index);
+        updatePlayerStatus();
+    } else {
+        alert("عذراً، ملف الصوت لهذه الآية غير متوفر حالياً.");
+    }
 }
 
 function handleAudioEnd() {
