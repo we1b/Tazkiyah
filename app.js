@@ -17,11 +17,29 @@ let performanceChartInstance = null;
 let lastUserData = null; 
 let currentDate = new Date();
 
-// === متغيرات جديدة (المواقيت والقرآن) ===
-let prayerTimes = null; // لتخزين مواقيت اليوم
-let nextPrayer = null;  // الصلاة القادمة
-let adhanAudio = new Audio('https://www.islamcan.com/audio/adhan/azan2.mp3'); // صوت أذان مفتوح المصدر
+// === متغيرات جديدة (المواقيت والقرآن والتنبيهات) ===
+let prayerTimes = null; 
+let nextPrayer = null;  
+let adhanAudio = new Audio('https://www.islamcan.com/audio/adhan/azan2.mp3'); 
 let adhanEnabled = true;
+let adhkarEnabled = true;
+
+// === متغيرات المصحف والمشغل الصوتي (جديد) ===
+let quranAudio = new Audio();
+let currentSurahAyahs = []; // لحفظ بيانات آيات السورة الحالية
+let currentAyahIndex = 0;   // الآية الحالية
+let verseRepeatCount = 1;   // عدد تكرار الآية المطلوبة
+let currentVerseRepeat = 0; // العداد الحالي لتكرار الآية
+let isPlaying = false;
+let currentReciterUrl = "Husary_128kbps"; // القارئ الافتراضي (الحصري)
+
+// قائمة القراء (روابط EveryAyah)
+const RECITERS = {
+    "Husary_128kbps": "الشيخ محمود خليل الحصري",
+    "Minshawy_Murattal_128kbps": "الشيخ محمد صديق المنشاوي",
+    "Abdul_Basit_Murattal_192kbps": "الشيخ عبد الباسط عبد الصمد",
+    "Mahmoud_Ali_Al_Banna_32kbps": "الشيخ محمود علي البنا"
+};
 
 // === تعريفات السنن المتاحة ===
 const HABITS_META = {
@@ -67,9 +85,10 @@ function initApp() {
             currentDate = new Date();
             loadUserDataForDate(currentDate);
             injectSettingsUI();
-            injectMobileNav(); // 📱 شريط موبايل جديد
-            initPrayerTimes(); // 🕌 تهيئة المواقيت
-            injectQuranModal(); // 📖 تهيئة المصحف
+            injectMobileNav(); 
+            initPrayerTimes(); 
+            injectQuranModal();
+            requestNotificationPermission(); 
         } else {
             currentUser = null;
             showScreen('landing-screen');
@@ -78,37 +97,37 @@ function initApp() {
     });
 }
 
-// === 1. نظام المواقيت والأذان (Prayer Times & Adhan) ===
+function requestNotificationPermission() {
+    if ("Notification" in window && Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+}
+
+// === 1. نظام المواقيت والأذان والأذكار ===
 
 function initPrayerTimes() {
-    // محاولة الحصول على الموقع
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(position => {
             fetchPrayerTimes(position.coords.latitude, position.coords.longitude);
         }, () => {
-            // لو رفض الموقع، نستخدم توقيت القاهرة افتراضياً
-            fetchPrayerTimes(30.0444, 31.2357);
-            alert("تم استخدام توقيت القاهرة افتراضياً لأن خدمة الموقع مغلقة.");
+            fetchPrayerTimes(30.0444, 31.2357); // Cairo default
         });
     } else {
         fetchPrayerTimes(30.0444, 31.2357);
     }
-
-    // فحص الوقت كل دقيقة للأذان
-    setInterval(checkAdhanTime, 60000);
+    setInterval(checkTimeForAlerts, 60000);
 }
 
 async function fetchPrayerTimes(lat, lng) {
     const date = new Date();
-    // استخدام API مجاني (Aladhan.com)
-    const url = `https://api.aladhan.com/v1/timings/${date.getDate()}-${date.getMonth()+1}-${date.getFullYear()}?latitude=${lat}&longitude=${lng}&method=4`; // method 4 = Umm Al-Qura (Makkah)
+    const url = `https://api.aladhan.com/v1/timings/${date.getDate()}-${date.getMonth()+1}-${date.getFullYear()}?latitude=${lat}&longitude=${lng}&method=4`;
     
     try {
         const response = await fetch(url);
         const data = await response.json();
         if(data.code === 200) {
             prayerTimes = data.data.timings;
-            updatePrayerUI(); // تحديث الواجهة بالمواقيت
+            updatePrayerUI();
             findNextPrayer();
         }
     } catch (e) {
@@ -118,24 +137,16 @@ async function fetchPrayerTimes(lat, lng) {
 
 function updatePrayerUI() {
     if (!prayerTimes) return;
-    // تحديث النصوص في كروت الصلوات إذا كانت موجودة
     const mapping = { fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' };
-    
     for (const [key, apiName] of Object.entries(mapping)) {
         const time = prayerTimes[apiName];
-        // تحويل لـ 12 ساعة
         const timeParts = time.split(':');
         let hours = parseInt(timeParts[0]);
         const minutes = timeParts[1];
         const ampm = hours >= 12 ? 'م' : 'ص';
-        hours = hours % 12;
-        hours = hours ? hours : 12; 
-        
-        const timeStr = `${hours}:${minutes} ${ampm}`;
-        
-        // البحث عن العنصر وتحديثه (سنضيف span للكود لاحقاً)
+        hours = hours % 12; hours = hours ? hours : 12; 
         const timeEl = document.getElementById(`time-${key}`);
-        if(timeEl) timeEl.innerText = timeStr;
+        if(timeEl) timeEl.innerText = `${hours}:${minutes} ${ampm}`;
     }
 }
 
@@ -143,62 +154,72 @@ function findNextPrayer() {
     if(!prayerTimes) return;
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
-    
     const mapping = { Fajr: 'الفجر', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء' };
     let foundNext = false;
-
     for (const [apiName, arName] of Object.entries(mapping)) {
         const [h, m] = prayerTimes[apiName].split(':');
         const pTime = parseInt(h) * 60 + parseInt(m);
-        
         if (pTime > currentTime) {
             nextPrayer = { name: arName, time: pTime };
-            // تحديث رسالة السايد بار
             const sidebarMsg = document.getElementById('sidebar-message-box');
             if(sidebarMsg) sidebarMsg.innerHTML = `الصلاة القادمة: <b>${arName}</b><br>الساعة ${h}:${m}`;
-            foundNext = true;
-            break;
+            foundNext = true; break;
         }
     }
-    
     if(!foundNext) {
-        // يبقى الفجر بكرة
         const sidebarMsg = document.getElementById('sidebar-message-box');
         if(sidebarMsg) sidebarMsg.innerHTML = `الصلاة القادمة: <b>الفجر</b> (غداً)`;
     }
 }
 
-function checkAdhanTime() {
-    if(!prayerTimes || !adhanEnabled) return;
-    
+function addMinutesToTime(timeStr, minutesToAdd) {
+    if(!timeStr) return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(h, m + minutesToAdd);
+    return { h: date.getHours(), m: date.getMinutes() };
+}
+
+function checkTimeForAlerts() {
+    if(!prayerTimes) return;
     const now = new Date();
     const currentH = now.getHours();
     const currentM = now.getMinutes();
     
-    const prayersToCheck = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    
-    prayersToCheck.forEach(p => {
-        const [h, m] = prayerTimes[p].split(':');
-        if (parseInt(h) === currentH && parseInt(m) === currentM) {
-            playAdhan(p);
+    if(adhanEnabled) {
+        ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
+            const [h, m] = prayerTimes[p].split(':');
+            if (parseInt(h) === currentH && parseInt(m) === currentM) playAdhan(p);
+        });
+    }
+    if(adhkarEnabled) {
+        const morningTime = addMinutesToTime(prayerTimes['Fajr'], 20);
+        if (morningTime && morningTime.h === currentH && morningTime.m === currentM) {
+            sendAdhkarNotification("🌅 همسة الصباح", "حان موعد أذكار الصباح");
         }
-    });
+        const eveningTime = addMinutesToTime(prayerTimes['Asr'], 10);
+        if (eveningTime && eveningTime.h === currentH && eveningTime.m === currentM) {
+            sendAdhkarNotification("🌇 همسة المساء", "حان موعد أذكار المساء");
+        }
+    }
 }
 
 function playAdhan(prayerName) {
-    adhanAudio.play().catch(e => console.log("Audio play failed (user interaction needed first)"));
-    // إظهار تنبيه
-    if (Notification.permission === "granted") {
-        new Notification(`حان الآن موعد صلاة ${prayerName}`);
-    } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then(permission => {
-            if (permission === "granted") new Notification(`حان الآن موعد صلاة ${prayerName}`);
-        });
+    adhanAudio.play().catch(e => console.log("Audio needed interaction"));
+    if (Notification.permission === "granted") new Notification(`📢 حان الآن موعد صلاة ${prayerName}`);
+    const sidebarMsg = document.getElementById('sidebar-message-box');
+    if(sidebarMsg) {
+        sidebarMsg.innerHTML = `<span class="text-[#047857] font-bold">الله أكبر! حان الآن موعد ${prayerName}</span>`;
+        sidebarMsg.classList.add('animate-pulse');
+        setTimeout(() => sidebarMsg.classList.remove('animate-pulse'), 10000);
     }
-    alert(`📢 حان الآن موعد صلاة ${prayerName}`);
 }
 
-// === 2. مصحف إلكتروني بسيط (Open Source Quran) ===
+function sendAdhkarNotification(title, body) {
+    if (Notification.permission === "granted") new Notification(title, { body: body });
+}
+
+// === 2. المصحف الإلكتروني (المحفظ المتطور) ===
 
 function injectQuranModal() {
     if (document.getElementById('quran-modal')) return;
@@ -207,34 +228,74 @@ function injectQuranModal() {
     modal.id = 'quran-modal';
     modal.className = 'fixed inset-0 bg-black/80 z-[90] hidden flex flex-col items-center justify-center p-4 backdrop-blur-sm';
     
-    // استخدام API القرآن الكريم (api.alquran.cloud)
-    // سنجلب قائمة السور أولاً
+    // بناء قائمة القراء
+    let reciterOptions = '';
+    for (const [key, name] of Object.entries(RECITERS)) {
+        reciterOptions += `<option value="${key}">${name}</option>`;
+    }
+
     modal.innerHTML = `
-        <div class="bg-white rounded-3xl w-full max-w-4xl h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
-            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-[#ECFDF5]">
-                <div class="flex items-center gap-3">
-                    <h3 class="text-xl font-bold text-[#047857] flex gap-2"><i data-lucide="book-open"></i> المصحف الإلكتروني</h3>
-                    <select id="surah-select" class="p-2 rounded-lg border border-gray-300 text-sm w-40" onchange="loadSurah(this.value)">
-                        <option>اختر السورة...</option>
+        <div class="bg-white rounded-3xl w-full max-w-5xl h-[95vh] shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
+            <!-- Header & Controls -->
+            <div class="p-4 border-b border-gray-100 bg-[#ECFDF5] flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <h3 class="text-xl font-bold text-[#047857] whitespace-nowrap"><i data-lucide="book-open" class="inline w-5 h-5"></i> المصحف</h3>
+                    <select id="surah-select" class="p-2 rounded-lg border border-gray-300 text-sm flex-1 md:w-48" onchange="loadSurah(this.value)">
+                        <option value="">اختر السورة...</option>
                     </select>
                 </div>
-                <button onclick="document.getElementById('quran-modal').classList.add('hidden')" class="text-gray-500 hover:text-red-500"><i data-lucide="x"></i></button>
+
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-center">
+                    <!-- Reciter -->
+                    <select id="reciter-select" class="p-2 rounded-lg border border-gray-300 text-sm" onchange="changeReciter(this.value)">
+                        ${reciterOptions}
+                    </select>
+                    
+                    <!-- Repetition -->
+                    <div class="flex items-center bg-white rounded-lg border border-gray-300 px-2">
+                        <span class="text-xs text-gray-500 pl-2">تكرار الآية:</span>
+                        <input type="number" id="repeat-count" min="1" max="100" value="1" class="w-12 p-1 text-center outline-none text-sm font-bold" onchange="verseRepeatCount = parseInt(this.value)">
+                    </div>
+                </div>
+
+                <button onclick="closeQuran()" class="text-gray-500 hover:text-red-500 bg-white p-2 rounded-full shadow-sm"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             
-            <div id="quran-content" class="flex-1 overflow-y-auto p-6 text-center bg-[#fdfdfd]">
+            <!-- Quran Content Display -->
+            <div id="quran-content" class="flex-1 overflow-y-auto p-6 text-center bg-[#fdfdfd] relative">
                 <div class="flex flex-col items-center justify-center h-full text-gray-400">
-                    <i data-lucide="book" class="w-16 h-16 mb-4 opacity-50"></i>
-                    <p>اختر السورة لبدء القراءة</p>
+                    <i data-lucide="book" class="w-20 h-20 mb-4 opacity-30"></i>
+                    <p>اختر السورة والقارئ لبدء الحفظ والمراجعة</p>
                 </div>
             </div>
             
-            <div class="p-3 bg-gray-50 text-center text-xs text-gray-400 border-t">
-                المصدر: api.alquran.cloud
+            <!-- Audio Player Bar -->
+            <div id="audio-player-bar" class="p-4 bg-white border-t border-gray-200 flex justify-between items-center hidden">
+                <div class="text-xs text-gray-500 hidden md:block">
+                    <span id="player-status">جاري التحميل...</span>
+                </div>
+                
+                <div class="flex items-center gap-4 mx-auto">
+                    <button onclick="prevVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-back" class="w-6 h-6"></i></button>
+                    <button onclick="togglePlay()" id="play-btn" class="w-12 h-12 bg-[#047857] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#065f46] transition-all">
+                        <i data-lucide="play" class="w-6 h-6 ml-1"></i>
+                    </button>
+                    <button onclick="nextVerse()" class="p-2 text-gray-600 hover:text-[#047857]"><i data-lucide="skip-forward" class="w-6 h-6"></i></button>
+                </div>
+
+                <div class="text-xs text-gray-400 font-mono hidden md:block w-24 text-left">
+                    EveryAyah.com
+                </div>
             </div>
         </div>`;
     
     document.body.appendChild(modal);
     fetchSurahList();
+    
+    // إعداد مستمع لنهاية الآية
+    quranAudio.addEventListener('ended', handleAudioEnd);
+    quranAudio.addEventListener('play', () => { isPlaying = true; updatePlayIcon(); });
+    quranAudio.addEventListener('pause', () => { isPlaying = false; updatePlayIcon(); });
 }
 
 async function fetchSurahList() {
@@ -251,75 +312,177 @@ async function fetchSurahList() {
     } catch(e) { console.log("Err loading surahs"); }
 }
 
+function changeReciter(reciterKey) {
+    currentReciterUrl = reciterKey;
+    // إذا كان يعمل حالياً، أعد تشغيل الآية الحالية بصوت القارئ الجديد
+    if (currentSurahAyahs.length > 0) {
+        playVerse(currentAyahIndex);
+    }
+}
+
 async function loadSurah(number) {
+    if(!number) return;
     const container = document.getElementById('quran-content');
     container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div></div>';
     
     try {
+        // جلب النص
         const res = await fetch(`https://api.alquran.cloud/v1/surah/${number}`);
         const data = await res.json();
         const ayahs = data.data.ayahs;
         
-        let html = `<h2 class="text-3xl font-bold text-[#047857] mb-6 font-serif">${data.data.name}</h2>`;
-        html += `<div class="text-2xl leading-loose font-serif text-gray-800 text-justify" style="direction: rtl;">`;
+        currentSurahAyahs = ayahs;
+        currentAyahIndex = 0;
+        currentVerseRepeat = 0;
         
-        // البسملة (إلا التوبة)
-        if(number != 1 && number != 9) html += `<div class="text-center mb-4 text-xl">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>`;
+        // رسم النص
+        let html = `<div class="max-w-3xl mx-auto">`;
+        html += `<h2 class="text-3xl font-bold text-[#047857] mb-6 font-serif">${data.data.name}</h2>`;
+        html += `<div class="text-2xl leading-[2.5] font-serif text-gray-800 text-justify" style="direction: rtl;">`;
         
-        ayahs.forEach(ayah => {
-            const text = ayah.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '').trim(); // إزالة البسملة من أول الآية لو موجودة في الـ API
-            html += `${text} <span class="text-[#047857] text-xl">۝${ayah.numberInSurah}</span> `;
+        if(number != 1 && number != 9) html += `<div class="text-center mb-6 text-xl text-gray-600">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>`;
+        
+        ayahs.forEach((ayah, index) => {
+            const text = ayah.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '').trim(); 
+            // إضافة معرف لكل آية لتمييزها
+            html += `<span id="ayah-${index}" class="ayah-span cursor-pointer hover:bg-green-50 rounded px-1 transition-colors duration-200" onclick="playVerse(${index})">${text} <span class="text-[#047857] text-xl font-sans inline-block mx-1">۝${ayah.numberInSurah}</span></span> `;
         });
         
-        html += `</div>`;
+        html += `</div></div>`;
         container.innerHTML = html;
-    } catch(e) { container.innerHTML = "حدث خطأ في تحميل السورة"; }
+        
+        // إظهار المشغل
+        document.getElementById('audio-player-bar').classList.remove('hidden');
+        
+        // تشغيل أول آية تلقائياً
+        playVerse(0);
+        
+    } catch(e) { container.innerHTML = "حدث خطأ في تحميل السورة"; console.error(e); }
+}
+
+function playVerse(index) {
+    if (index < 0 || index >= currentSurahAyahs.length) return;
+    
+    currentAyahIndex = index;
+    const ayah = currentSurahAyahs[index];
+    
+    // تكوين رابط الصوت (pad numbers with 0)
+    // Format: http://www.everyayah.com/data/{Reciter}/{Surah3}{Ayah3}.mp3
+    const surahNum = String(ayah.surah.number).padStart(3, '0');
+    const ayahNum = String(ayah.numberInSurah).padStart(3, '0');
+    const url = `https://www.everyayah.com/data/${currentReciterUrl}/${surahNum}${ayahNum}.mp3`;
+    
+    quranAudio.src = url;
+    quranAudio.play();
+    
+    highlightAyah(index);
+    updatePlayerStatus();
+}
+
+function handleAudioEnd() {
+    currentVerseRepeat++;
+    
+    // منطق التكرار
+    if (currentVerseRepeat < verseRepeatCount) {
+        quranAudio.currentTime = 0;
+        quranAudio.play();
+    } else {
+        // الانتقال للآية التالية
+        currentVerseRepeat = 0;
+        if (currentAyahIndex < currentSurahAyahs.length - 1) {
+            playVerse(currentAyahIndex + 1);
+        } else {
+            // انتهت السورة
+            isPlaying = false;
+            updatePlayIcon();
+        }
+    }
+}
+
+function highlightAyah(index) {
+    // إزالة التمييز السابق
+    document.querySelectorAll('.ayah-span').forEach(el => {
+        el.classList.remove('bg-green-200', 'text-green-900');
+    });
+    
+    // إضافة التمييز للآية الحالية
+    const el = document.getElementById(`ayah-${index}`);
+    if (el) {
+        el.classList.add('bg-green-200', 'text-green-900');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function togglePlay() {
+    if (isPlaying) quranAudio.pause();
+    else quranAudio.play();
+}
+
+function updatePlayIcon() {
+    const icon = document.querySelector('#play-btn i');
+    if (isPlaying) {
+        icon.setAttribute('data-lucide', 'pause');
+    } else {
+        icon.setAttribute('data-lucide', 'play');
+    }
+    lucide.createIcons();
+}
+
+function nextVerse() {
+    currentVerseRepeat = 0; // تصفير عداد التكرار عند الانتقال اليدوي
+    playVerse(currentAyahIndex + 1);
+}
+
+function prevVerse() {
+    currentVerseRepeat = 0;
+    playVerse(currentAyahIndex - 1);
+}
+
+function updatePlayerStatus() {
+    const status = document.getElementById('player-status');
+    const ayah = currentSurahAyahs[currentAyahIndex];
+    if(status && ayah) {
+        status.innerText = `الآية ${ayah.numberInSurah} - تكرار (${currentVerseRepeat + 1}/${verseRepeatCount})`;
+    }
 }
 
 function openQuran() {
     const modal = document.getElementById('quran-modal');
-    if(modal) modal.classList.remove('hidden');
-    else injectQuranModal();
+    if(modal) modal.classList.remove('hidden'); else injectQuranModal();
 }
 
-// === 3. تجربة الموبايل المحسنة (Mobile UX) ===
+function closeQuran() {
+    const modal = document.getElementById('quran-modal');
+    if(modal) modal.classList.add('hidden');
+    quranAudio.pause(); // إيقاف الصوت عند الإغلاق
+}
 
+// === 3. Mobile Nav ===
 function injectMobileNav() {
-    // لو الشريط موجود خلاص منعملوش تاني
     if (document.getElementById('mobile-bottom-nav')) return;
-
-    // إضافة مساحة في الأسفل عشان المحتوى مايتغطاش
     const mainContent = document.querySelector('#app-screen main > div');
     if(mainContent) mainContent.classList.add('pb-24');
-
     const nav = document.createElement('div');
     nav.id = 'mobile-bottom-nav';
     nav.className = 'md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 flex justify-around items-center h-16 pb-safe';
     nav.innerHTML = `
         <button onclick="showScreen('app-screen')" class="flex flex-col items-center justify-center w-full h-full text-[#047857]">
-            <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
-            <span class="text-[10px] font-bold mt-1">يوميتي</span>
+            <i data-lucide="layout-dashboard" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">يوميتي</span>
         </button>
         <button onclick="openQuran()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]">
-            <i data-lucide="book-open" class="w-6 h-6"></i>
-            <span class="text-[10px] font-bold mt-1">المصحف</span>
+            <i data-lucide="book-open" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">المصحف</span>
         </button>
         <button onclick="openReportModal()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]">
-            <i data-lucide="bar-chart-2" class="w-6 h-6"></i>
-            <span class="text-[10px] font-bold mt-1">تقارير</span>
+            <i data-lucide="bar-chart-2" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">تقارير</span>
         </button>
         <button onclick="openSettingsModal()" class="flex flex-col items-center justify-center w-full h-full text-gray-500 hover:text-[#047857]">
-            <i data-lucide="settings" class="w-6 h-6"></i>
-            <span class="text-[10px] font-bold mt-1">إعدادات</span>
-        </button>
-    `;
+            <i data-lucide="settings" class="w-6 h-6"></i><span class="text-[10px] font-bold mt-1">إعدادات</span>
+        </button>`;
     document.body.appendChild(nav);
     lucide.createIcons();
 }
 
-// === بقية الكود الأساسي (Logic & Data) ===
-
-// === Date Helpers ===
+// === Date & Nav ===
 function getFormattedDateID(date) {
     const offset = date.getTimezoneOffset();
     const localDate = new Date(date.getTime() - (offset*60*1000));
@@ -328,7 +491,6 @@ function getFormattedDateID(date) {
 function getReadableDate(date) { return date.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
 function isToday(date) { return getFormattedDateID(date) === getFormattedDateID(new Date()); }
 
-// === Navigation & Date ===
 function changeDate(days) {
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + days);
@@ -341,20 +503,17 @@ function updateDateUI() {
     const dateStr = getReadableDate(currentDate);
     const dateDisplay = document.getElementById('current-date-display');
     if(dateDisplay) dateDisplay.innerText = dateStr;
-    
     const nextBtn = document.getElementById('btn-next-day');
     if(nextBtn) {
         if (isToday(currentDate)) { nextBtn.disabled = true; nextBtn.classList.add('opacity-30'); } 
         else { nextBtn.disabled = false; nextBtn.classList.remove('opacity-30'); }
     }
-
     const isReadOnly = !isToday(currentDate);
     const tasks = document.getElementById('tasks-container');
     const adhkar = document.getElementById('adhkar-container');
     const addBtn = document.getElementById('btn-add-dhikr');
     const badge = document.querySelector('.read-only-badge');
     const motive = document.getElementById('motivational-text');
-
     if (isReadOnly) {
         if(tasks) tasks.classList.add('read-only-mode');
         if(adhkar) adhkar.classList.add('read-only-mode');
@@ -375,7 +534,6 @@ function loadUserDataForDate(date) {
     if (unsubscribeSnapshot) unsubscribeSnapshot();
     const dateID = getFormattedDateID(date);
     updateDateUI();
-
     unsubscribeSnapshot = db.collection('users').doc(currentUser.uid)
         .collection('daily_logs').doc(dateID)
         .onSnapshot(doc => {
@@ -387,9 +545,7 @@ function loadUserDataForDate(date) {
                 updateDashboardStats(data);
             } else {
                 if (isToday(date)) {
-                    db.collection('users').doc(currentUser.uid)
-                        .collection('daily_logs').doc(dateID)
-                        .set(DEFAULT_USER_DATA);
+                    db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID).set(DEFAULT_USER_DATA);
                 } else {
                     lastUserData = DEFAULT_USER_DATA;
                     renderTasks(DEFAULT_USER_DATA);
@@ -407,75 +563,35 @@ function loadUserDataForDate(date) {
         });
 }
 
-// === UI Rendering (Updated for Prayer Times) ===
+// === Rendering ===
 function renderTasks(data) {
     const container = document.getElementById('tasks-container');
     container.innerHTML = '';
     if (!data || !data.prayers) return;
 
-    let html = `<div>
-        <div class="flex items-center gap-3 mb-5">
-            <div class="w-1.5 h-8 bg-[#047857] rounded-full"></div>
-            <h3 class="text-xl font-bold text-gray-800">الفرائض وورد القرآن</h3>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
-    
+    let html = `<div><div class="flex items-center gap-3 mb-5"><div class="w-1.5 h-8 bg-[#047857] rounded-full"></div><h3 class="text-xl font-bold text-gray-800">الفرائض وورد القرآن</h3></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
     const pNames = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
-    
     for (const [k, v] of Object.entries(data.prayers)) {
-        // إضافة span للوقت
-        html += `<div class="bg-white p-5 rounded-2xl border transition-all hover:-translate-y-1 flex justify-between items-center cursor-pointer ${v?'border-green-200 bg-green-50/50':'border-gray-100'}" onclick="toggleTask('prayers','${k}',${!v})">
-            <div class="flex gap-4 items-center">
-                <div class="w-10 h-10 rounded-full flex items-center justify-center ${v?'bg-[#047857] text-white':'bg-gray-100 text-gray-400'}"><i data-lucide="${v?'check':'clock'}" class="w-5 h-5"></i></div>
-                <div>
-                    <span class="block font-bold text-lg ${v?'text-[#047857]':'text-gray-600'}">${pNames[k]}</span>
-                    <span id="time-${k}" class="text-xs text-gray-400 font-bold">--:--</span>
-                </div>
-            </div>
-        </div>`;
+        html += `<div class="bg-white p-5 rounded-2xl border transition-all hover:-translate-y-1 flex justify-between items-center cursor-pointer ${v?'border-green-200 bg-green-50/50':'border-gray-100'}" onclick="toggleTask('prayers','${k}',${!v})"><div class="flex gap-4 items-center"><div class="w-10 h-10 rounded-full flex items-center justify-center ${v?'bg-[#047857] text-white':'bg-gray-100 text-gray-400'}"><i data-lucide="${v?'check':'clock'}" class="w-5 h-5"></i></div><div><span class="block font-bold text-lg ${v?'text-[#047857]':'text-gray-600'}">${pNames[k]}</span><span id="time-${k}" class="text-xs text-gray-400 font-bold">--:--</span></div></div></div>`;
     }
-
     const quranDone = (typeof data.quran !== 'undefined') ? data.quran : (data.habits?.quran || false);
-    html += `<div class="bg-white p-5 rounded-2xl border transition-all hover:-translate-y-1 flex justify-between items-center cursor-pointer ${quranDone?'border-green-200 bg-green-50/50':'border-gray-100'}" onclick="toggleTask('root','quran',${!quranDone})">
-            <div class="flex gap-4 items-center">
-                <div class="w-10 h-10 rounded-full flex items-center justify-center ${quranDone?'bg-[#047857] text-white':'bg-gray-100 text-gray-400'}"><i data-lucide="book-open" class="w-5 h-5"></i></div>
-                <div>
-                    <span class="block font-bold text-lg ${quranDone?'text-[#047857]':'text-gray-600'}">ورد القرآن</span>
-                    <span class="text-xs text-gray-400 cursor-pointer hover:text-[#047857]" onclick="event.stopPropagation(); openQuran()">📖 اقرأ الآن</span>
-                </div>
-            </div>
-        </div>`;
-
+    html += `<div class="bg-white p-5 rounded-2xl border transition-all hover:-translate-y-1 flex justify-between items-center cursor-pointer ${quranDone?'border-green-200 bg-green-50/50':'border-gray-100'}" onclick="toggleTask('root','quran',${!quranDone})"><div class="flex gap-4 items-center"><div class="w-10 h-10 rounded-full flex items-center justify-center ${quranDone?'bg-[#047857] text-white':'bg-gray-100 text-gray-400'}"><i data-lucide="book-open" class="w-5 h-5"></i></div><div><span class="block font-bold text-lg ${quranDone?'text-[#047857]':'text-gray-600'}">ورد القرآن</span><span class="text-xs text-gray-400 cursor-pointer hover:text-[#047857]" onclick="event.stopPropagation(); openQuran()">📖 اقرأ الآن</span></div></div></div>`;
     html += `</div></div>`;
 
     const userSettings = data.habitSettings || DEFAULT_USER_DATA.habitSettings;
     const activeHabits = Object.keys(userSettings).filter(key => userSettings[key]);
-    
     if (activeHabits.length > 0) {
-        html += `<div class="mt-10">
-            <div class="flex items-center gap-3 mb-5">
-                <div class="w-1.5 h-8 bg-[#D4AF37] rounded-full"></div>
-                <h3 class="text-xl font-bold text-gray-800">السنن المختارة</h3>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
-        
+        html += `<div class="mt-10"><div class="flex items-center gap-3 mb-5"><div class="w-1.5 h-8 bg-[#D4AF37] rounded-full"></div><h3 class="text-xl font-bold text-gray-800">السنن المختارة</h3></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
         for (const key of activeHabits) {
             const meta = HABITS_META[key];
             if (!meta) continue;
             const v = data.habits[key] || false;
-            html += `<div class="bg-white p-5 rounded-2xl border transition-all hover:-translate-y-1 flex justify-between items-center cursor-pointer ${v?'border-yellow-200 bg-yellow-50/50':'border-gray-100'}" onclick="toggleTask('habits','${key}',${!v})">
-                <div class="flex gap-4 items-center">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center ${v?'bg-yellow-500 text-white':'bg-gray-100 text-gray-400'}"><i data-lucide="${meta.icon}" class="w-5 h-5"></i></div>
-                    <span class="font-bold text-lg ${v?'text-yellow-700':'text-gray-600'}">${meta.name}</span>
-                </div>
-            </div>`;
+            html += `<div class="bg-white p-5 rounded-2xl border transition-all hover:-translate-y-1 flex justify-between items-center cursor-pointer ${v?'border-yellow-200 bg-yellow-50/50':'border-gray-100'}" onclick="toggleTask('habits','${key}',${!v})"><div class="flex gap-4 items-center"><div class="w-10 h-10 rounded-full flex items-center justify-center ${v?'bg-yellow-500 text-white':'bg-gray-100 text-gray-400'}"><i data-lucide="${meta.icon}" class="w-5 h-5"></i></div><span class="font-bold text-lg ${v?'text-yellow-700':'text-gray-600'}">${meta.name}</span></div></div>`;
         }
         html += `</div></div>`;
     }
-
     container.innerHTML = html;
     lucide.createIcons();
-    // إعادة تحديث الأوقات بعد الريندر
     updatePrayerUI();
 }
 
@@ -487,18 +603,7 @@ function renderAdhkar(list) {
     list.forEach((item, index) => {
         total += item.count;
         const progress = Math.min((item.count / (item.target || 100)) * 100, 100);
-        container.innerHTML += `
-            <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group">
-                <div class="flex justify-between items-start mb-2 relative z-10">
-                    <div><h4 class="font-bold text-gray-800 text-lg">${item.name}</h4><span class="text-xs text-gray-400">الهدف: ${item.target}</span></div>
-                    <button onclick="removeAdhkar(${index})" class="text-gray-300 hover:text-red-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </div>
-                <div class="flex justify-between items-end relative z-10 mt-2">
-                    <span class="text-3xl font-bold text-blue-600">${item.count}</span>
-                    <button onclick="incrementAdhkar(${index})" class="click-anim w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-lg shadow-blue-200"><i data-lucide="plus" class="w-6 h-6"></i></button>
-                </div>
-                <div class="absolute bottom-0 left-0 h-1.5 bg-blue-100 w-full"><div class="h-full bg-blue-500 transition-all duration-300" style="width: ${progress}%"></div></div>
-            </div>`;
+        container.innerHTML += `<div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group"><div class="flex justify-between items-start mb-2 relative z-10"><div><h4 class="font-bold text-gray-800 text-lg">${item.name}</h4><span class="text-xs text-gray-400">الهدف: ${item.target}</span></div><button onclick="removeAdhkar(${index})" class="text-gray-300 hover:text-red-400"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div><div class="flex justify-between items-end relative z-10 mt-2"><span class="text-3xl font-bold text-blue-600">${item.count}</span><button onclick="incrementAdhkar(${index})" class="click-anim w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-lg shadow-blue-200"><i data-lucide="plus" class="w-6 h-6"></i></button></div><div class="absolute bottom-0 left-0 h-1.5 bg-blue-100 w-full"><div class="h-full bg-blue-500 transition-all duration-300" style="width: ${progress}%"></div></div></div>`;
     });
     const totalEl = document.getElementById('total-adhkar-count');
     if(totalEl) totalEl.innerText = total;
@@ -513,7 +618,6 @@ function toggleTask(cat, key, val) {
     if (cat === 'root') update[key] = val; else update[`${cat}.${key}`] = val;
     db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID).update(update);
 }
-
 async function addNewDhikr() {
     if (!isToday(currentDate)) return; 
     const name = document.getElementById('new-dhikr-name').value;
@@ -528,7 +632,6 @@ async function addNewDhikr() {
     toggleAdhkarModal();
     document.getElementById('new-dhikr-name').value = '';
 }
-
 async function incrementAdhkar(index) {
     if (!isToday(currentDate)) return;
     const dateID = getFormattedDateID(currentDate);
@@ -538,7 +641,6 @@ async function incrementAdhkar(index) {
     list[index].count += 1;
     await docRef.update({ customAdhkar: list });
 }
-
 async function removeAdhkar(index) {
     if (!isToday(currentDate)) return;
     if(!confirm("حذف؟")) return;
@@ -549,7 +651,6 @@ async function removeAdhkar(index) {
     list.splice(index, 1);
     await docRef.update({ customAdhkar: list });
 }
-
 function toggleAdhkarModal() { document.getElementById('adhkar-modal').classList.toggle('hidden'); }
 
 // === Settings Logic ===
@@ -576,13 +677,20 @@ function injectSettingsUI() {
                     <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-red-500"><i data-lucide="x"></i></button>
                 </div>
                 <div class="p-6 max-h-[60vh] overflow-y-auto space-y-3" id="settings-toggles-container"></div>
-                <!-- زر التحكم في الأذان -->
-                <div class="px-6 pb-2">
+                <!-- Controls -->
+                <div class="px-6 pb-2 space-y-2">
                     <div class="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
                         <div class="flex items-center gap-3"><div class="bg-white p-2 rounded-lg text-[#047857]"><i data-lucide="volume-2" class="w-5 h-5"></i></div><span class="font-bold text-gray-700">صوت الأذان</span></div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" class="sr-only peer" id="adhan-toggle" checked onchange="adhanEnabled = this.checked">
                             <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#047857]"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+                        <div class="flex items-center gap-3"><div class="bg-white p-2 rounded-lg text-yellow-600"><i data-lucide="bell" class="w-5 h-5"></i></div><span class="font-bold text-gray-700">تنبيهات الأذكار (صباح/مساء)</span></div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only peer" id="adhkar-toggle" checked onchange="adhkarEnabled = this.checked">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
                         </label>
                     </div>
                 </div>
