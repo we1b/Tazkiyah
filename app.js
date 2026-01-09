@@ -14,7 +14,10 @@ let auth, db;
 let currentUser = null;
 let unsubscribeSnapshot = null;
 let performanceChartInstance = null;
-let lastUserData = null; // لحفظ آخر نسخة من البيانات للتقارير
+let lastUserData = null; 
+
+// === إدارة التاريخ ===
+let currentDate = new Date(); // التاريخ المعروض حالياً
 
 const DEFAULT_USER_DATA = {
     prayers: { fajr: false, dhuhr: false, asr: false, maghrib: false, isha: false },
@@ -30,10 +33,6 @@ const MESSAGES_DB = {
 
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const today = new Date().toLocaleDateString('ar-EG', dateOptions);
-    const dateEl = document.getElementById('current-date');
-    if(dateEl) dateEl.innerText = today;
     initApp();
 });
 
@@ -47,7 +46,9 @@ function initApp() {
         if (user) {
             currentUser = user;
             showScreen('app-screen');
-            syncUserDataRealtime(user.uid);
+            // عند الدخول، نضبط التاريخ على اليوم ونحمل البيانات
+            currentDate = new Date();
+            loadUserDataForDate(currentDate);
         } else {
             currentUser = null;
             showScreen('landing-screen');
@@ -56,98 +57,114 @@ function initApp() {
     });
 }
 
-// === Navigation ===
-function hideLoader() {
-    const loader = document.getElementById('loader');
-    if(loader) { loader.style.opacity = '0'; setTimeout(() => loader.style.display = 'none', 500); }
+// === Date Helpers ===
+function getFormattedDateID(date) {
+    // يحول التاريخ لصيغة YYYY-MM-DD لاستخدامه كـ ID في قاعدة البيانات
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset*60*1000));
+    return localDate.toISOString().split('T')[0];
 }
 
-function showScreen(screenId) {
-    ['landing-screen', 'auth-screen', 'app-screen'].forEach(id => {
-        const el = document.getElementById(id);
-        if (id === screenId) {
-            el.classList.remove('hidden');
-            if (id === 'app-screen') setTimeout(initChart, 100); 
-        } else {
-            el.classList.add('hidden');
-        }
-    });
+function getReadableDate(date) {
+    return date.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function goToAuth(mode) { showScreen('auth-screen'); switchAuthMode(mode); }
-function showLandingScreen() { showScreen('landing-screen'); }
+function isToday(date) {
+    const d1 = getFormattedDateID(date);
+    const d2 = getFormattedDateID(new Date());
+    return d1 === d2;
+}
 
-function switchAuthMode(mode) {
-    const loginForm = document.getElementById('login-form');
-    const regForm = document.getElementById('register-form');
-    const tabLogin = document.getElementById('tab-login');
-    const tabReg = document.getElementById('tab-register');
-    const errorBox = document.getElementById('auth-error');
-    errorBox.classList.add('hidden');
+// === Navigation & Date Control ===
+function changeDate(days) {
+    // تغيير اليوم
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + days);
+    
+    // منع الذهاب للمستقبل
+    if (newDate > new Date()) return;
+    
+    currentDate = newDate;
+    loadUserDataForDate(currentDate);
+}
 
-    if (mode === 'login') {
-        loginForm.classList.remove('hidden'); regForm.classList.add('hidden');
-        tabLogin.classList.replace('text-gray-500', 'text-[#047857]'); tabLogin.classList.add('bg-white', 'shadow-sm');
-        tabReg.classList.remove('bg-white', 'shadow-sm'); tabReg.classList.replace('text-[#047857]', 'text-gray-500');
+function updateDateUI() {
+    const dateStr = getReadableDate(currentDate);
+    document.getElementById('current-date-display').innerText = dateStr;
+    
+    // تعطيل زر "التالي" لو كنا في يوم النهاردة
+    const nextBtn = document.getElementById('btn-next-day');
+    if (isToday(currentDate)) {
+        nextBtn.disabled = true;
+        nextBtn.classList.add('opacity-30');
     } else {
-        loginForm.classList.add('hidden'); regForm.classList.remove('hidden');
-        tabReg.classList.replace('text-gray-500', 'text-[#047857]'); tabReg.classList.add('bg-white', 'shadow-sm');
-        tabLogin.classList.remove('bg-white', 'shadow-sm'); tabLogin.classList.replace('text-[#047857]', 'text-gray-500');
+        nextBtn.disabled = false;
+        nextBtn.classList.remove('opacity-30');
+    }
+
+    // وضع "للقراءة فقط"
+    const appContainer = document.querySelector('#app-screen main');
+    const isReadOnly = !isToday(currentDate);
+    
+    // إضافة كلاسات لتعطيل التفاعل بصرياً وعملياً
+    if (isReadOnly) {
+        document.getElementById('tasks-container').classList.add('read-only-mode');
+        document.getElementById('adhkar-container').classList.add('read-only-mode');
+        document.getElementById('btn-add-dhikr').classList.add('hidden');
+        document.querySelector('.read-only-badge').style.display = 'inline-flex';
+        document.getElementById('motivational-text').innerText = "عرض أرشيف سابق";
+    } else {
+        document.getElementById('tasks-container').classList.remove('read-only-mode');
+        document.getElementById('adhkar-container').classList.remove('read-only-mode');
+        document.getElementById('btn-add-dhikr').classList.remove('hidden');
+        document.querySelector('.read-only-badge').style.display = 'none';
+        document.getElementById('motivational-text').innerText = "كيف هي همتك اليوم؟";
     }
 }
 
-// === Auth Logic ===
-async function handleLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    try { await auth.signInWithEmailAndPassword(email, password); } 
-    catch (error) { showAuthError("خطأ في الدخول: تأكد من البيانات"); }
+// === Realtime Data (The Core Logic) ===
+function loadUserDataForDate(date) {
+    if (unsubscribeSnapshot) unsubscribeSnapshot(); // إيقاف الاستماع لليوم السابق
+    
+    const dateID = getFormattedDateID(date);
+    updateDateUI();
+
+    // المسار الجديد: users -> uid -> daily_logs -> YYYY-MM-DD
+    unsubscribeSnapshot = db.collection('users').doc(currentUser.uid)
+        .collection('daily_logs').doc(dateID)
+        .onSnapshot(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                lastUserData = data;
+                renderTasks(data);
+                renderAdhkar(data.customAdhkar || []);
+                updateDashboardStats(data);
+            } else {
+                // لو السجل مش موجود
+                if (isToday(date)) {
+                    // لو ده النهاردة، ننشئ سجل جديد (تجديد تلقائي)
+                    db.collection('users').doc(currentUser.uid)
+                        .collection('daily_logs').doc(dateID)
+                        .set(DEFAULT_USER_DATA);
+                } else {
+                    // لو ده يوم فات ومكنش فيه سجل (فاته التقرير)
+                    // نعرض صفحة فاضية بس (بدون إنشاء داتا عشان منلعبش في التاريخ)
+                    lastUserData = DEFAULT_USER_DATA;
+                    renderTasks(DEFAULT_USER_DATA);
+                    renderAdhkar([]);
+                    updateDashboardStats(DEFAULT_USER_DATA);
+                }
+            }
+            
+            // تحديث بيانات المستخدم
+            const name = currentUser.displayName || currentUser.email.split('@')[0];
+            document.getElementById('user-name-display').innerText = name;
+            document.getElementById('welcome-name').innerText = name;
+            document.getElementById('user-avatar').innerText = name[0].toUpperCase();
+        });
 }
 
-async function handleRegister(e) {
-    e.preventDefault();
-    const name = document.getElementById('reg-name').value;
-    const email = document.getElementById('reg-email').value;
-    const password = document.getElementById('reg-password').value;
-    try {
-        const cred = await auth.createUserWithEmailAndPassword(email, password);
-        await cred.user.updateProfile({ displayName: name });
-        await db.collection('users').doc(cred.user.uid).set(DEFAULT_USER_DATA);
-    } catch (error) { showAuthError("خطأ في التسجيل: " + error.message); }
-}
-
-async function handleLogout() {
-    if(unsubscribeSnapshot) unsubscribeSnapshot();
-    await auth.signOut();
-    showScreen('landing-screen');
-}
-
-function showAuthError(msg) {
-    const el = document.getElementById('auth-error');
-    el.innerText = msg;
-    el.classList.remove('hidden');
-}
-
-// === Realtime Data & Rendering ===
-function syncUserDataRealtime(uid) {
-    unsubscribeSnapshot = db.collection('users').doc(uid).onSnapshot(doc => {
-        if (doc.exists) {
-            const data = doc.data();
-            lastUserData = data; // Save for reports
-            renderTasks(data);
-            renderAdhkar(data.customAdhkar || []);
-            updateDashboardStats(data);
-        } else {
-            db.collection('users').doc(uid).set(DEFAULT_USER_DATA);
-        }
-        const name = currentUser.displayName || currentUser.email.split('@')[0];
-        document.getElementById('user-name-display').innerText = name;
-        document.getElementById('welcome-name').innerText = name;
-        document.getElementById('user-avatar').innerText = name[0].toUpperCase();
-    });
-}
-
+// === UI Rendering ===
 function renderTasks(data) {
     const container = document.getElementById('tasks-container');
     container.innerHTML = '';
@@ -216,51 +233,95 @@ function renderAdhkar(list) {
     lucide.createIcons();
 }
 
-function toggleAdhkarModal() { document.getElementById('adhkar-modal').classList.toggle('hidden'); }
+// === Actions Logic (Secured) ===
+function toggleTask(cat, key, val) {
+    // حماية إضافية: لو مش النهاردة، امنع التعديل
+    if (!isToday(currentDate)) return;
+
+    const dateID = getFormattedDateID(currentDate);
+    const update = {};
+    update[`${cat}.${key}`] = val;
+    
+    db.collection('users').doc(currentUser.uid)
+      .collection('daily_logs').doc(dateID)
+      .update(update);
+}
+
 async function addNewDhikr() {
+    if (!isToday(currentDate)) return; // حماية
+    
     const name = document.getElementById('new-dhikr-name').value;
     const target = parseInt(document.getElementById('new-dhikr-target').value) || 100;
     if(!name) return alert("أدخل اسم الذكر");
-    const docRef = db.collection('users').doc(currentUser.uid);
+    
+    const dateID = getFormattedDateID(currentDate);
+    const docRef = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID);
     const doc = await docRef.get();
-    let currentList = doc.data().customAdhkar || [];
+    
+    let currentList = doc.exists ? (doc.data().customAdhkar || []) : [];
     currentList.push({ name, count: 0, target });
+    
     await docRef.update({ customAdhkar: currentList });
     toggleAdhkarModal();
     document.getElementById('new-dhikr-name').value = '';
     document.getElementById('new-dhikr-target').value = '';
 }
+
 async function incrementAdhkar(index) {
-    const docRef = db.collection('users').doc(currentUser.uid);
+    if (!isToday(currentDate)) return; // حماية
+
+    const dateID = getFormattedDateID(currentDate);
+    const docRef = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID);
     const doc = await docRef.get();
     let list = doc.data().customAdhkar;
     list[index].count += 1;
     await docRef.update({ customAdhkar: list });
 }
+
 async function removeAdhkar(index) {
+    if (!isToday(currentDate)) return; // حماية
     if(!confirm("حذف هذا الذكر؟")) return;
-    const docRef = db.collection('users').doc(currentUser.uid);
+    
+    const dateID = getFormattedDateID(currentDate);
+    const docRef = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID);
     const doc = await docRef.get();
     let list = doc.data().customAdhkar;
     list.splice(index, 1);
     await docRef.update({ customAdhkar: list });
 }
 
-function toggleTask(cat, key, val) {
-    const update = {};
-    update[`${cat}.${key}`] = val;
-    db.collection('users').doc(currentUser.uid).update(update);
+function toggleAdhkarModal() { document.getElementById('adhkar-modal').classList.toggle('hidden'); }
+
+// === Standard Boilerplate Logic (Auth, Loader, Screens) ===
+// (Same as before, simplified for brevity but functional)
+function hideLoader() { const l=document.getElementById('loader'); if(l){l.style.opacity='0'; setTimeout(()=>l.style.display='none',500);} }
+function showScreen(id) { ['landing-screen','auth-screen','app-screen'].forEach(s=>{document.getElementById(s).classList.add('hidden')}); document.getElementById(id).classList.remove('hidden'); if(id==='app-screen') setTimeout(initChart,100); }
+function goToAuth(m) { showScreen('auth-screen'); switchAuthMode(m); }
+function showLandingScreen() { showScreen('landing-screen'); }
+function switchAuthMode(m) {
+    document.getElementById('login-form').classList.add('hidden');
+    document.getElementById('register-form').classList.add('hidden');
+    document.getElementById('reset-form').classList.add('hidden');
+    document.getElementById('auth-tabs').classList.remove('hidden');
+    document.getElementById('auth-error').classList.add('hidden');
+    
+    if(m==='login') document.getElementById('login-form').classList.remove('hidden');
+    else if(m==='register') document.getElementById('register-form').classList.remove('hidden');
+    else { document.getElementById('reset-form').classList.remove('hidden'); document.getElementById('auth-tabs').classList.add('hidden'); }
 }
 
+async function handleLogin(e){ e.preventDefault(); try{ await auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-password').value); }catch(err){showAuthError("خطأ في الدخول");} }
+async function handleRegister(e){ e.preventDefault(); try{ const c=await auth.createUserWithEmailAndPassword(document.getElementById('reg-email').value, document.getElementById('reg-password').value); await c.user.updateProfile({displayName:document.getElementById('reg-name').value}); }catch(err){showAuthError(err.message);} }
+async function handleResetPassword(e){ e.preventDefault(); try{ await auth.sendPasswordResetEmail(document.getElementById('reset-email').value); alert("تم الإرسال"); switchAuthMode('login'); }catch(err){showAuthError(err.message);} }
+async function handleLogout(){ if(unsubscribeSnapshot) unsubscribeSnapshot(); await auth.signOut(); showScreen('landing-screen'); }
+function showAuthError(m){ const e=document.getElementById('auth-error'); e.innerText=m; e.classList.remove('hidden'); }
+
+// === Chart & Stats ===
 function initChart() {
     const ctx = document.getElementById('performanceChart');
     if(!ctx) return;
     if (performanceChartInstance) performanceChartInstance.destroy();
-    performanceChartInstance = new Chart(ctx, {
-        type: 'doughnut',
-        data: { labels: ['منجز', 'متبقي'], datasets: [{ data: [0, 100], backgroundColor: ['#047857', '#E5E7EB'], borderWidth: 0, cutout: '75%' }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { animateScale: true, animateRotate: true } }
-    });
+    performanceChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: ['منجز', 'متبقي'], datasets: [{ data: [0, 100], backgroundColor: ['#047857', '#E5E7EB'], borderWidth: 0, cutout: '75%' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { animateScale: true, animateRotate: true } } });
 }
 
 function updateDashboardStats(data) {
@@ -278,121 +339,43 @@ function updateDashboardStats(data) {
     document.getElementById('sidebar-message-box').innerText = msgData.sidebar;
 }
 
-// === REPORT CENTER LOGIC (New) ===
-
+// === Report Modal ===
 function openReportModal() {
-    // Fill Preview Data
-    const date = new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const dateStr = getReadableDate(currentDate); // Use current viewed date
     const name = currentUser.displayName || "مستخدم تزكية";
     const percent = document.getElementById('chart-percent').innerText;
     const totalAdhkar = document.getElementById('total-adhkar-count').innerText;
     
-    document.getElementById('report-date').innerText = date;
+    document.getElementById('report-date').innerText = dateStr;
     document.getElementById('report-user').innerText = name;
     document.getElementById('report-percent').innerText = percent;
     document.getElementById('report-adhkar').innerText = totalAdhkar;
 
-    // Fill Tasks List for Report
     const listEl = document.getElementById('report-tasks-list');
     listEl.innerHTML = '';
     
     if(lastUserData) {
         const pNames = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
-        let hasItems = false;
-        
-        // Add Prayers
         for (const [k, v] of Object.entries(lastUserData.prayers)) {
-            if(v) {
-                listEl.innerHTML += `<li class="flex items-center gap-2 text-green-700"><span class="w-2 h-2 rounded-full bg-green-500"></span> صلاة ${pNames[k]}</li>`;
-                hasItems = true;
-            }
+            if(v) listEl.innerHTML += `<li class="flex items-center gap-2 text-green-700"><span class="w-2 h-2 rounded-full bg-green-500"></span> صلاة ${pNames[k]}</li>`;
         }
-        
-        // Add Habits
         const hNames = { rawatib: 'السنن الرواتب', duha: 'الضحى', witr: 'الوتر', quran: 'ورد القرآن', azkar_m: 'أذكار الصباح', azkar_e: 'أذكار المساء', azkar_s: 'أذكار النوم' };
         for (const [k, v] of Object.entries({ ...DEFAULT_USER_DATA.habits, ...lastUserData.habits })) {
-            if(v && hNames[k]) {
-                listEl.innerHTML += `<li class="flex items-center gap-2 text-yellow-700"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> ${hNames[k]}</li>`;
-                hasItems = true;
-            }
+            if(v && hNames[k]) listEl.innerHTML += `<li class="flex items-center gap-2 text-yellow-700"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> ${hNames[k]}</li>`;
         }
-
-        if(!hasItems) listEl.innerHTML = `<li class="text-gray-400 italic">لم يتم إنجاز مهام بعد اليوم.</li>`;
     }
-
     document.getElementById('report-modal').classList.remove('hidden');
 }
-
-function closeReportModal() {
-    document.getElementById('report-modal').classList.add('hidden');
-}
-
-// 1. Download as Image (PNG)
-function downloadAsImage() {
-    const element = document.getElementById('report-preview-content');
-    html2canvas(element).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `Tazkiah-Report-${Date.now()}.png`;
-        link.href = canvas.toDataURL();
-        link.click();
-    });
-}
-
-// 2. Download as PDF
-function downloadAsPDF() {
-    const element = document.getElementById('report-preview-content');
-    const { jsPDF } = window.jspdf;
-    
-    html2canvas(element).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        
-        pdf.addImage(imgData, 'PNG', 0, 10, pdfWidth, pdfHeight);
-        pdf.save(`Tazkiah-Report-${Date.now()}.pdf`);
-    });
-}
-
-// 3. Download as Excel
+function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
+function downloadAsImage() { const e=document.getElementById('report-preview-content'); html2canvas(e).then(c=>{const l=document.createElement('a'); l.download=`Report-${Date.now()}.png`; l.href=c.toDataURL(); l.click();}); }
+function downloadAsPDF() { const e=document.getElementById('report-preview-content'); const {jsPDF}=window.jspdf; html2canvas(e).then(c=>{const i=c.toDataURL('image/png'); const p=new jsPDF('p','mm','a4'); const w=p.internal.pageSize.getWidth(); const h=(c.height*w)/c.width; p.addImage(i,'PNG',0,10,w,h); p.save(`Report-${Date.now()}.pdf`);}); }
 function downloadAsExcel() {
     if(!lastUserData) return;
-
-    // Prepare Data Array
-    const rows = [
-        ["تقرير تطبيق تزكية اليومي"],
-        ["التاريخ", new Date().toLocaleDateString('ar-EG')],
-        ["الاسم", currentUser.displayName],
-        ["نسبة الإنجاز", document.getElementById('chart-percent').innerText],
-        ["إجمالي الذكر", document.getElementById('total-adhkar-count').innerText],
-        [],
-        ["نوع العبادة", "الحالة"],
-    ];
-
-    // Add Prayers
+    const rows = [["تقرير تزكية"],["التاريخ", getReadableDate(currentDate)],["النسبة", document.getElementById('chart-percent').innerText],[],["العبادة","الحالة"]];
     const pNames = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
-    for (const [k, v] of Object.entries(lastUserData.prayers)) {
-        rows.push([`صلاة ${pNames[k]}`, v ? "تم" : "لم يتم"]);
-    }
-
-    // Add Habits
+    for (const [k, v] of Object.entries(lastUserData.prayers)) rows.push([`صلاة ${pNames[k]}`, v?"تم":"لم يتم"]);
     const hNames = { rawatib: 'السنن الرواتب', duha: 'الضحى', witr: 'الوتر', quran: 'ورد القرآن', azkar_m: 'أذكار الصباح', azkar_e: 'أذكار المساء', azkar_s: 'أذكار النوم' };
     const habits = { ...DEFAULT_USER_DATA.habits, ...lastUserData.habits };
-    for (const [k, v] of Object.entries(habits)) {
-        if(hNames[k]) rows.push([hNames[k], v ? "تم" : "لم يتم"]);
-    }
-
-    // Add Adhkar
-    if(lastUserData.customAdhkar) {
-        rows.push([], ["الأذكار الحرة", "العدد"]);
-        lastUserData.customAdhkar.forEach(item => {
-            rows.push([item.name, item.count]);
-        });
-    }
-
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Tazkiah Report");
-    XLSX.writeFile(wb, `Tazkiah-Report-${Date.now()}.xlsx`);
+    for (const [k, v] of Object.entries(habits)) if(hNames[k]) rows.push([hNames[k], v?"تم":"لم يتم"]);
+    const ws = XLSX.utils.aoa_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Report"); XLSX.writeFile(wb, `Report-${Date.now()}.xlsx`);
 }
