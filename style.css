@@ -22,33 +22,6 @@ body {
     animation: fadeIn 0.4s ease-out forwards;
 }
 
-/* تحسينات الموبايل */
-@media (max-width: 640px) {
-    body { font-size: 14px; }
-    h1 { font-size: 1.5rem; }
-    h2 { font-size: 1.25rem; }
-    h3 { font-size: 1.1rem; }
-    .p-5 { padding: 1rem; }
-}
-
-/* Modal Content Styling */
-.modal-content {
-    background: white; border-radius: 1.5rem; overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    width: 100%; max-width: 32rem; margin: 1rem;
-    transform: scale(1); transition: transform 0.2s;
-    max-height: 90vh; display: flex; flex-direction: column;
-}
-
-@media (max-width: 640px) {
-    .modal-content {
-        margin: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-        position: absolute; bottom: 0; max-width: 100%; max-height: 85vh;
-        animation: slideUp 0.3s ease-out;
-    }
-}
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
 /* Custom Checkbox */
 .task-checkbox {
     appearance: none;
@@ -84,18 +57,8 @@ body {
     transform: scale(1);
 }
 
-/* تأثير النقر */
-.click-anim:active { transform: scale(0.95); }
-
-/* تقرير المعاينة */
-#report-preview-content {
-    background: #fff;
-    border: 4px double #047857;
-    position: relative;
+/* Loading styling */
+.loading-overlay {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(2px);
 }
-
-/* Scrollbar Styling */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #047857; }
