@@ -23,53 +23,107 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: 'Cairo', sans-serif; }
+        body { font-family: 'Cairo', sans-serif; scroll-behavior: smooth; }
         .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
         .gradient-text { background: linear-gradient(135deg, #047857 0%, #10B981 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .click-anim:active { transform: scale(0.95); }
-        #report-preview-content {
-            background-image: radial-gradient(#047857 0.5px, transparent 0.5px), radial-gradient(#047857 0.5px, #ffffff 0.5px);
-            background-size: 20px 20px;
-            background-position: 0 0, 10px 10px;
-            background-color: #fcfcfc;
+        
+        /* أنيميشن الظهور */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        /* كلاس للأيام السابقة (للقراءة فقط) */
-        .read-only-mode { opacity: 0.7; pointer-events: none; filter: grayscale(0.8); }
-        .read-only-badge { display: none; }
-        .read-only-mode .read-only-badge { display: inline-flex; }
+        .animate-up { animation: fadeInUp 0.6s ease-out forwards; opacity: 0; }
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+
+        /* تنسيق التقرير الاحترافي */
+        #report-preview-content {
+            background: #fff;
+            background-image: 
+                linear-gradient(#04785708 1px, transparent 1px),
+                linear-gradient(90deg, #04785708 1px, transparent 1px);
+            background-size: 20px 20px;
+            border: 8px double #047857;
+            position: relative;
+        }
+        .report-watermark {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            font-size: 8rem;
+            font-weight: bold;
+            color: rgba(4, 120, 87, 0.03);
+            pointer-events: none;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800 overflow-hidden relative">
 
     <div id="loader" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
         <div class="w-16 h-16 border-4 border-green-100 border-t-[#047857] rounded-full animate-spin"></div>
+        <p class="mt-4 text-[#047857] font-bold animate-pulse">جاري تجهيز وردك...</p>
     </div>
 
-    <!-- 1. Landing Screen -->
+    <!-- 1. Landing Screen (محسنة) -->
     <section id="landing-screen" class="absolute inset-0 bg-white z-40 overflow-y-auto hidden">
         <nav class="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <i data-lucide="moon" class="text-yellow-500 w-8 h-8 fill-current"></i>
                 <h1 class="text-2xl font-bold text-[#047857]">تزكية</h1>
             </div>
-            <button onclick="goToAuth('login')" class="px-6 py-2.5 bg-[#047857] text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all">ابدأ الآن</button>
+            <button onclick="goToAuth('login')" class="px-6 py-2.5 bg-[#047857] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">ابدأ الآن</button>
         </nav>
-        <main class="flex flex-col items-center justify-center text-center px-4 mt-16 md:mt-24 pb-20">
-            <h1 class="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
-                أصلح قلبك، <br><span class="gradient-text">يصلح الله حالك</span>
-            </h1>
-            <p class="text-xl text-gray-500 max-w-2xl mx-auto mb-10">رفيقك الذكي لمتابعة الصلوات، العداد الحر للأذكار، والورد القرآني.</p>
-            <button onclick="goToAuth('register')" class="px-10 py-4 bg-[#047857] text-white text-lg font-bold rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center gap-3">
-                أنشئ حسابك المجاني <i data-lucide="arrow-left"></i>
-            </button>
+        
+        <main class="flex flex-col items-center justify-center text-center px-4 mt-10 md:mt-20 pb-20">
+            <div class="animate-up">
+                <span class="inline-block py-1 px-3 rounded-full bg-green-50 text-[#047857] text-xs font-bold mb-4 border border-green-200">✨ رفيقك الإيماني الذكي</span>
+                <h1 class="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+                    أصلح قلبك، <br><span class="gradient-text">يصلح الله حالك</span>
+                </h1>
+                <p class="text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
+                    تطبيق يساعدك على الانتظام في الصلاة، حفظ القرآن، ومتابعة الأذكار <br> بتجربة هادئة ومخصصة لك.
+                </p>
+                <button onclick="goToAuth('register')" class="group px-10 py-4 bg-[#047857] text-white text-lg font-bold rounded-2xl shadow-xl hover:shadow-2xl hover:bg-[#065f46] transition-all flex items-center gap-3 mx-auto">
+                    أنشئ حسابك المجاني <i data-lucide="arrow-left" class="group-hover:-translate-x-1 transition-transform"></i>
+                </button>
+            </div>
+
+            <!-- أهداف التطبيق (Features) -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-24 max-w-6xl w-full px-4">
+                <div class="p-8 rounded-3xl bg-gray-50 border border-gray-100 hover:border-green-200 hover:shadow-lg transition-all animate-up delay-100">
+                    <div class="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center text-[#047857] mb-6 mx-auto">
+                        <i data-lucide="bar-chart-2" class="w-7 h-7"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">تابع نموك</h3>
+                    <p class="text-gray-500 text-sm">تقارير يومية وأسبوعية تساعدك على معرفة نقاط قوتك وتحسينها.</p>
+                </div>
+                <div class="p-8 rounded-3xl bg-gray-50 border border-gray-100 hover:border-green-200 hover:shadow-lg transition-all animate-up delay-200">
+                    <div class="w-14 h-14 bg-yellow-100 rounded-2xl flex items-center justify-center text-yellow-600 mb-6 mx-auto">
+                        <i data-lucide="book-open" class="w-7 h-7"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">مصحف معلم</h3>
+                    <p class="text-gray-500 text-sm">استمع وحفظ القرآن مع كبار القراء وميزة التكرار الذكي.</p>
+                </div>
+                <div class="p-8 rounded-3xl bg-gray-50 border border-gray-100 hover:border-green-200 hover:shadow-lg transition-all animate-up delay-300">
+                    <div class="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-6 mx-auto">
+                        <i data-lucide="clock" class="w-7 h-7"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">مواقيت دقيقة</h3>
+                    <p class="text-gray-500 text-sm">تنبيهات للأذان والأذكار حسب منطقتك الجغرافية بدقة عالية.</p>
+                </div>
+            </div>
         </main>
     </section>
 
     <!-- 2. Auth Screen -->
     <section id="auth-screen" class="hidden absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
         <button onclick="showLandingScreen()" class="absolute top-6 right-6 text-gray-400 hover:text-[#047857] flex items-center gap-2 font-bold transition-colors"><i data-lucide="arrow-right" class="w-5 h-5"></i> رجوع</button>
-        <div class="w-full max-w-md">
+        <div class="w-full max-w-md animate-up">
             <div class="text-center mb-8">
+                <div class="inline-block p-3 bg-green-50 rounded-full mb-4"><i data-lucide="user" class="w-8 h-8 text-[#047857]"></i></div>
                 <h2 class="text-3xl font-bold text-gray-800">أهلاً بك 🌿</h2>
                 <p class="text-gray-500 mt-2">استكمل وردك اليومي</p>
             </div>
@@ -79,34 +133,29 @@
                 <button onclick="switchAuthMode('register')" id="tab-register" class="flex-1 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-gray-700 transition-all">جديد</button>
             </div>
 
-            <!-- Login Form -->
-            <form id="login-form" class="space-y-5 animate-fade-in" onsubmit="handleLogin(event)">
-                <input type="email" id="login-email" placeholder="البريد الإلكتروني" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
+            <form id="login-form" class="space-y-5" onsubmit="handleLogin(event)">
+                <input type="email" id="login-email" placeholder="البريد الإلكتروني" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none transition-all">
                 <div class="relative">
-                    <input type="password" id="login-password" placeholder="كلمة المرور" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
+                    <input type="password" id="login-password" placeholder="كلمة المرور" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none transition-all">
                 </div>
                 <div class="flex justify-end">
                     <button type="button" onclick="switchAuthMode('reset')" class="text-sm font-bold text-[#047857] hover:underline">نسيت كلمة المرور؟</button>
                 </div>
-                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-lg transition-all">تسجيل الدخول</button>
+                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-lg transition-all active:scale-95">تسجيل الدخول</button>
             </form>
 
-            <!-- Register Form -->
-            <form id="register-form" class="space-y-5 hidden animate-fade-in" onsubmit="handleRegister(event)">
+            <form id="register-form" class="space-y-5 hidden" onsubmit="handleRegister(event)">
                 <input type="text" id="reg-name" placeholder="الاسم" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
                 <input type="email" id="reg-email" placeholder="البريد الإلكتروني" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
                 <input type="password" id="reg-password" placeholder="كلمة المرور" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
-                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-lg transition-all">إنشاء حساب</button>
+                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-[#047857] hover:bg-[#065f46] font-bold text-lg transition-all active:scale-95">إنشاء حساب</button>
             </form>
 
-            <!-- Reset Password Form -->
-            <form id="reset-form" class="space-y-5 hidden animate-fade-in" onsubmit="handleResetPassword(event)">
-                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-700 text-center mb-2">
-                    أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة.
-                </div>
-                <input type="email" id="reset-email" placeholder="البريد الإلكتروني الخاص بحسابك" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
-                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-blue-600 hover:bg-blue-700 font-bold text-lg transition-all">إرسال رابط الاستعادة</button>
-                <button type="button" onclick="switchAuthMode('login')" class="w-full py-2 text-gray-500 font-bold hover:text-gray-800">إلغاء والعودة للدخول</button>
+            <form id="reset-form" class="space-y-5 hidden" onsubmit="handleResetPassword(event)">
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-700 text-center mb-2">أدخل بريدك الإلكتروني وسنرسل لك رابطاً للاستعادة.</div>
+                <input type="email" id="reset-email" placeholder="البريد الإلكتروني" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#047857] outline-none">
+                <button type="submit" class="w-full py-4 rounded-2xl shadow-lg text-white bg-blue-600 hover:bg-blue-700 font-bold text-lg transition-all">إرسال</button>
+                <button type="button" onclick="switchAuthMode('login')" class="w-full py-2 text-gray-500 font-bold hover:text-gray-800">إلغاء</button>
             </form>
 
             <div id="auth-error" class="hidden mt-4 p-4 rounded-xl bg-red-50 text-red-600 text-sm text-center border border-red-100"></div>
@@ -116,7 +165,7 @@
 
     <!-- 3. Dashboard Screen -->
     <div id="app-screen" class="hidden flex h-screen bg-[#F3F4F6] overflow-hidden">
-        <!-- Sidebar -->
+        <!-- Sidebar (Desktop) - تم إضافة زر المصحف هنا -->
         <aside class="w-72 bg-white hidden md:flex flex-col border-l border-gray-100 shadow-sm z-20">
             <div class="h-24 flex items-center justify-center border-b border-gray-50">
                 <h1 class="text-3xl font-bold text-[#047857] flex gap-3 items-center tracking-tight">
@@ -124,16 +173,18 @@
                 </h1>
             </div>
             <div class="flex-1 p-6 space-y-3 overflow-y-auto">
-                <button class="w-full flex items-center gap-4 px-6 py-4 bg-gradient-to-l from-green-50 to-white border-r-4 border-[#047857] text-[#047857] rounded-l-2xl font-bold shadow-sm transition-all">
+                <button onclick="showScreen('app-screen')" class="w-full flex items-center gap-4 px-6 py-4 bg-gradient-to-l from-green-50 to-white border-r-4 border-[#047857] text-[#047857] rounded-l-2xl font-bold shadow-sm transition-all">
                     <i data-lucide="layout-dashboard"></i> اليومية
+                </button>
+                <!-- زر المصحف الجديد للكمبيوتر -->
+                <button onclick="openQuran()" class="w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all">
+                    <i data-lucide="book-open"></i> المصحف الإلكتروني
                 </button>
                 <button onclick="openReportModal()" class="w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all">
                     <i data-lucide="file-text"></i> استخراج التقارير
                 </button>
                 <div class="mt-4 px-4">
-                    <div id="sidebar-message-box" class="p-4 bg-yellow-50 rounded-2xl border border-yellow-100 text-sm text-gray-600 leading-relaxed">
-                        ...
-                    </div>
+                    <div id="sidebar-message-box" class="p-4 bg-yellow-50 rounded-2xl border border-yellow-100 text-sm text-gray-600 leading-relaxed">...</div>
                 </div>
             </div>
             <div class="p-6 border-t border-gray-50">
@@ -145,7 +196,7 @@
                     </div>
                 </div>
                 <button onclick="handleLogout()" class="w-full py-3 border-2 border-red-50 text-red-500 rounded-xl hover:bg-red-50 font-bold flex items-center justify-center gap-2 transition-all">
-                    <i data-lucide="log-out" class="w-4 h-4"></i> تسجيل خروج
+                    <i data-lucide="log-out" class="w-4 h-4"></i> خروج
                 </button>
             </div>
         </aside>
@@ -158,38 +209,25 @@
             </header>
 
             <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-32 scroll-smooth">
-                
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
                     <div>
                         <h2 class="text-3xl font-bold text-gray-800">مرحباً، <span id="welcome-name" class="gradient-text">...</span> 👋</h2>
                         <div class="flex items-center gap-2 mt-2">
                              <p class="text-gray-500" id="motivational-text">كيف هي همتك اليوم؟</p>
-                             <span class="read-only-badge px-2 py-1 bg-gray-200 text-gray-600 text-xs rounded-lg font-bold">أرشيف سابق</span>
+                             <span class="read-only-badge px-2 py-1 bg-gray-200 text-gray-600 text-xs rounded-lg font-bold" style="display:none">أرشيف سابق</span>
                         </div>
                     </div>
                     
-                    <!-- Date Navigator (التحكم في التاريخ) -->
                     <div class="flex gap-2 items-center bg-white p-1 rounded-xl shadow-sm border border-gray-100">
-                        <button onclick="changeDate(-1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors">
-                            <i data-lucide="chevron-right" class="w-5 h-5"></i>
-                        </button>
+                        <button onclick="changeDate(-1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
                         <div class="px-4 py-2 text-sm text-gray-800 font-bold min-w-[140px] text-center flex items-center justify-center gap-2">
-                            <i data-lucide="calendar" class="w-4 h-4 text-[#047857]"></i>
-                            <span id="current-date-display">...</span>
+                            <i data-lucide="calendar" class="w-4 h-4 text-[#047857]"></i><span id="current-date-display">...</span>
                         </div>
-                        <button onclick="changeDate(1)" id="btn-next-day" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                            <i data-lucide="chevron-left" class="w-5 h-5"></i>
-                        </button>
+                        <button onclick="changeDate(1)" id="btn-next-day" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
                     </div>
                 </div>
 
-                <!-- Report Button Mobile -->
-                <button onclick="openReportModal()" class="md:hidden w-full mb-6 bg-white px-5 py-3 rounded-xl shadow-sm border border-gray-100 text-sm text-[#047857] font-bold flex items-center justify-center gap-2">
-                    <i data-lucide="file-text" class="w-4 h-4"></i> استخراج تقرير هذا اليوم
-                </button>
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-                    <!-- Chart -->
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col items-center justify-center relative">
                         <h3 class="font-bold text-gray-700 mb-4 w-full text-right">مؤشر الأداء اليومي</h3>
                         <div class="relative w-48 h-48">
@@ -201,13 +239,10 @@
                         </div>
                     </div>
 
-                    <!-- Smart Message -->
                     <div class="bg-gradient-to-br from-[#047857] to-[#064E3B] p-8 rounded-3xl shadow-xl shadow-green-900/20 lg:col-span-2 text-white relative overflow-hidden flex flex-col justify-center">
                         <div class="relative z-10">
                             <div class="flex items-center gap-3 mb-4 opacity-90">
-                                <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                                    <i data-lucide="sparkles" class="w-5 h-5 text-yellow-300"></i>
-                                </div>
+                                <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm"><i data-lucide="sparkles" class="w-5 h-5 text-yellow-300"></i></div>
                                 <span class="text-sm font-bold tracking-wide uppercase text-green-100">رسالة اليوم لك</span>
                             </div>
                             <h3 id="feedback-title" class="text-2xl md:text-3xl font-bold mb-3 leading-snug">...</h3>
@@ -219,39 +254,25 @@
                     </div>
                 </div>
 
-                <!-- Adhkar Counter Section -->
                 <div class="mb-10">
                     <div class="flex justify-between items-center mb-5">
-                        <div class="flex items-center gap-3">
-                            <div class="w-1.5 h-8 bg-blue-600 rounded-full"></div>
-                            <h3 class="text-xl font-bold text-gray-800">العداد الحر (الأذكار) 📿</h3>
-                        </div>
-                        <button onclick="toggleAdhkarModal()" id="btn-add-dhikr" class="text-sm bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors flex items-center gap-2">
-                            <i data-lucide="plus" class="w-4 h-4"></i> إضافة ذكر
-                        </button>
+                        <div class="flex items-center gap-3"><div class="w-1.5 h-8 bg-blue-600 rounded-full"></div><h3 class="text-xl font-bold text-gray-800">العداد الحر (الأذكار) 📿</h3></div>
+                        <button onclick="toggleAdhkarModal()" id="btn-add-dhikr" class="text-sm bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> إضافة ذكر</button>
                     </div>
-
-                    <div id="adhkar-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                        <!-- Adhkar Cards -->
-                    </div>
+                    <div id="adhkar-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5"></div>
                      <div class="mt-4 bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
-                        <span class="font-bold text-blue-800">مجموع الذكر اليوم:</span>
-                        <span class="text-2xl font-bold text-blue-600" id="total-adhkar-count">0</span>
+                        <span class="font-bold text-blue-800">مجموع الذكر اليوم:</span><span class="text-2xl font-bold text-blue-600" id="total-adhkar-count">0</span>
                     </div>
                 </div>
 
-                <!-- Tasks Section -->
-                <div id="tasks-container" class="space-y-8">
-                    <!-- Tasks Generated Here -->
-                </div>
-
+                <div id="tasks-container" class="space-y-8"></div>
             </div>
         </main>
     </div>
 
     <!-- Adhkar Modal -->
     <div id="adhkar-modal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 animate-[fadeIn_0.2s_ease-out]">
+        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 animate-up">
             <h3 class="text-xl font-bold text-gray-800 mb-4">إضافة ذكر جديد</h3>
             <input type="text" id="new-dhikr-name" placeholder="اسم الذكر (مثلاً: استغفر الله)" class="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 mb-3 focus:border-blue-500 outline-none">
             <input type="number" id="new-dhikr-target" placeholder="العدد المستهدف (مثلاً: 100)" class="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 mb-6 focus:border-blue-500 outline-none">
@@ -262,63 +283,45 @@
         </div>
     </div>
 
-    <!-- REPORT MODAL -->
+    <!-- REPORT MODAL (تصميم الشهادة) -->
     <div id="report-modal" class="fixed inset-0 bg-black/60 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] md:h-auto animate-[fadeIn_0.2s_ease-out]">
-            
+        <div class="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] md:h-auto animate-up">
             <div class="w-full md:w-1/3 bg-gray-50 p-6 border-l border-gray-100 flex flex-col justify-center gap-4">
-                <div class="text-center mb-4">
-                    <h3 class="text-xl font-bold text-[#047857]">تصدير التقرير</h3>
-                    <p class="text-sm text-gray-500">اختر الصيغة المناسبة لك</p>
-                </div>
-                
-                <button onclick="downloadAsPDF()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="file-text"></i> ملف PDF
-                </button>
-                <button onclick="downloadAsImage()" class="w-full py-4 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="image"></i> صورة (PNG)
-                </button>
-                <button onclick="downloadAsExcel()" class="w-full py-4 bg-green-50 text-green-600 border border-green-100 rounded-xl font-bold hover:bg-green-100 transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="sheet"></i> ملف Excel
-                </button>
-
-                <div class="mt-auto pt-4 border-t border-gray-200">
-                    <button onclick="closeReportModal()" class="w-full py-3 text-gray-500 font-bold hover:bg-gray-200 rounded-xl">إغلاق</button>
-                </div>
+                <div class="text-center mb-4"><h3 class="text-xl font-bold text-[#047857]">تصدير التقرير</h3><p class="text-sm text-gray-500">اختر الصيغة المناسبة لك</p></div>
+                <button onclick="downloadAsPDF()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"><i data-lucide="file-text"></i> ملف PDF</button>
+                <button onclick="downloadAsImage()" class="w-full py-4 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2"><i data-lucide="image"></i> صورة (PNG)</button>
+                <button onclick="downloadAsExcel()" class="w-full py-4 bg-green-50 text-green-600 border border-green-100 rounded-xl font-bold hover:bg-green-100 transition-all flex items-center justify-center gap-2"><i data-lucide="sheet"></i> ملف Excel</button>
+                <div class="mt-auto pt-4 border-t border-gray-200"><button onclick="closeReportModal()" class="w-full py-3 text-gray-500 font-bold hover:bg-gray-200 rounded-xl">إغلاق</button></div>
             </div>
-
             <div class="w-full md:w-2/3 p-4 md:p-8 bg-gray-200 overflow-y-auto flex items-center justify-center">
+                <!-- محتوى التقرير (الشهادة) -->
                 <div id="report-preview-content" class="bg-white p-8 rounded-none shadow-xl w-full max-w-lg min-h-[600px] relative text-gray-800">
-                    <div class="border-b-2 border-[#047857] pb-4 mb-6 flex justify-between items-end">
-                        <div>
-                            <h1 class="text-2xl font-bold text-[#047857]">تقرير تزكية اليومي</h1>
-                            <p class="text-xs text-gray-500 mt-1">تطبيق تزكية - رفيقك اليومي</p>
-                        </div>
-                        <div class="text-left">
-                            <p class="font-bold text-sm" id="report-date">...</p>
-                            <p class="text-xs text-gray-500" id="report-user">...</p>
-                        </div>
+                    <div class="report-watermark">تزكية</div>
+                    <div class="text-center border-b-2 border-[#047857] pb-4 mb-6">
+                        <span class="text-xs text-gray-500 mb-1 block">بسم الله الرحمن الرحيم</span>
+                        <h1 class="text-3xl font-bold text-[#047857]">تقرير إنجاز يومي</h1>
                     </div>
-
-                    <div class="flex justify-between items-center bg-[#ECFDF5] p-4 rounded-lg mb-6 border border-green-100">
-                        <div class="text-center">
-                            <p class="text-xs text-gray-500">نسبة الإنجاز</p>
-                            <p class="text-3xl font-bold text-[#047857]" id="report-percent">0%</p>
-                        </div>
-                        <div class="h-8 w-px bg-green-200"></div>
-                        <div class="text-center">
-                            <p class="text-xs text-gray-500">إجمالي الأذكار</p>
-                            <p class="text-3xl font-bold text-blue-600" id="report-adhkar">0</p>
-                        </div>
-                    </div>
-
+                    
                     <div class="mb-6">
-                        <h4 class="font-bold text-sm mb-2 border-b pb-1">تفاصيل المهام:</h4>
+                        <p class="text-sm text-gray-500">نبارك للمثابر:</p>
+                        <h2 class="text-2xl font-bold text-gray-800 mt-1" id="report-user">...</h2>
+                        <p class="text-xs text-gray-400 mt-1">التاريخ: <span id="report-date">...</span></p>
+                    </div>
+
+                    <div class="flex justify-between items-center bg-[#ECFDF5] p-6 rounded-xl mb-6 border border-green-100 relative z-10">
+                        <div class="text-center"><p class="text-xs text-gray-500 mb-1">نسبة الإنجاز</p><p class="text-4xl font-bold text-[#047857]" id="report-percent">0%</p></div>
+                        <div class="h-10 w-px bg-green-200"></div>
+                        <div class="text-center"><p class="text-xs text-gray-500 mb-1">إجمالي الأذكار</p><p class="text-4xl font-bold text-blue-600" id="report-adhkar">0</p></div>
+                    </div>
+
+                    <div class="mb-6 relative z-10">
+                        <h4 class="font-bold text-sm mb-3 border-b pb-1 text-gray-600">تفاصيل الإنجاز:</h4>
                         <ul class="text-sm space-y-2" id="report-tasks-list"></ul>
                     </div>
                     
                     <div class="absolute bottom-6 left-0 right-0 text-center">
                         <p class="text-xs text-gray-400 italic">"قليل دائم خير من كثير منقطع"</p>
+                        <p class="text-[10px] text-gray-300 mt-1">تطبيق تزكية</p>
                     </div>
                 </div>
             </div>
