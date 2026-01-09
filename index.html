@@ -3,75 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>تزكية</title>
+    <title>تزكية | رفيقك اليومي</title>
     
+    <!-- تحسينات السرعة (Preconnect) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://firestore.googleapis.com">
+
+    <!-- مكتبات التنسيق والأيقونات -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- مكتبات التقارير -->
+    <!-- مكتبات الرسوم البيانية والتقارير -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <!-- ربط ملف التنسيق الخارجي -->
     <link rel="stylesheet" href="style.css">
     
     <!-- مكتبات فايربيس -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-    <style>
-        body { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .click-anim:active { transform: scale(0.95); }
-        
-        /* تحسينات الموبايل */
-        @media (max-width: 640px) {
-            body { font-size: 14px; }
-            h1 { font-size: 1.5rem; }
-            h2 { font-size: 1.25rem; }
-            h3 { font-size: 1.1rem; }
-            .p-5 { padding: 1rem; } /* تصغير الحواف في الكروت */
-        }
-
-        /* المودال */
-        .modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
-            display: flex; align-items: center; justify-content: center;
-            backdrop-filter: blur(4px); transition: opacity 0.2s;
-        }
-        .modal-content {
-            background: white; border-radius: 1.5rem; overflow: hidden;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            width: 100%; max-width: 32rem; margin: 1rem;
-            transform: scale(1); transition: transform 0.2s;
-            max-height: 90vh; display: flex; flex-direction: column;
-        }
-        @media (max-width: 640px) {
-            .modal-content {
-                margin: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-                position: absolute; bottom: 0; max-width: 100%; max-height: 85vh;
-                animation: slideUp 0.3s ease-out;
-            }
-        }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-        /* التقرير */
-        #report-preview-content {
-            background: #fff;
-            border: 4px double #047857;
-            position: relative;
-        }
-    </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800 overflow-hidden relative">
 
+    <!-- شاشة التحميل -->
     <div id="loader" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
         <div class="w-12 h-12 border-4 border-green-100 border-t-[#047857] rounded-full animate-spin"></div>
+        <p class="mt-4 text-xs text-gray-400 font-bold">جاري التجهيز...</p>
     </div>
 
-    <!-- 1. Landing Screen -->
+    <!-- 1. الشاشة الترحيبية -->
     <section id="landing-screen" class="absolute inset-0 bg-white z-40 overflow-y-auto hidden">
         <nav class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center gap-2">
@@ -93,7 +58,7 @@
         </main>
     </section>
 
-    <!-- 2. Auth Screen -->
+    <!-- 2. شاشة التسجيل والدخول -->
     <section id="auth-screen" class="hidden absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
         <button onclick="showLandingScreen()" class="absolute top-6 right-6 text-gray-400 hover:text-[#047857] flex items-center gap-1 font-bold text-sm"><i data-lucide="arrow-right" class="w-4 h-4"></i> رجوع</button>
         <div class="w-full max-w-sm">
@@ -123,21 +88,17 @@
                 <button type="submit" class="w-full py-3.5 rounded-xl shadow-lg text-white bg-blue-600 font-bold text-sm transition-all">إرسال الرابط</button>
                 <button type="button" onclick="switchAuthMode('login')" class="w-full py-2 text-gray-500 font-bold text-xs">إلغاء</button>
             </form>
-            <div id="auth-error" class="hidden mt-4 p-3 rounded-lg bg-red-50 text-red-600 text-xs text-center border border-red-100"></div>
-            <div id="auth-success" class="hidden mt-4 p-3 rounded-lg bg-green-50 text-green-600 text-xs text-center border border-green-100"></div>
         </div>
     </section>
 
-    <!-- 3. Dashboard Screen -->
+    <!-- 3. لوحة التحكم -->
     <div id="app-screen" class="hidden flex h-screen bg-[#F3F4F6] overflow-hidden">
-        <!-- Sidebar (Desktop) -->
+        <!-- القائمة الجانبية (PC) -->
         <aside class="w-64 bg-white hidden md:flex flex-col border-l border-gray-100 shadow-sm z-20">
             <div class="h-20 flex items-center justify-center border-b border-gray-50">
                 <h1 class="text-2xl font-bold text-[#047857] flex gap-2 items-center"><i data-lucide="moon" class="text-yellow-500 fill-current"></i> تزكية</h1>
             </div>
-            <div class="flex-1 p-4 space-y-2 overflow-y-auto" id="sidebar-content">
-                <!-- أزرار القائمة -->
-            </div>
+            <div class="flex-1 p-4 space-y-2 overflow-y-auto" id="sidebar-content"></div>
             <div class="p-4 border-t border-gray-50">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-[#047857] text-white flex items-center justify-center font-bold text-lg" id="user-avatar">م</div>
@@ -149,21 +110,24 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
+        <!-- المحتوى الرئيسي -->
         <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+            <!-- هيدر الموبايل -->
             <header class="md:hidden h-16 bg-white/90 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 z-10 shrink-0 sticky top-0">
                 <span class="font-bold text-lg text-[#047857]">تزكية</span>
-                <button onclick="handleLogout()" class="p-2 bg-red-50 text-red-500 rounded-lg"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+                <div class="flex gap-2">
+                    <button onclick="openPrayerSettingsModal()" class="p-2 bg-gray-50 text-gray-600 rounded-lg"><i data-lucide="map-pin" class="w-4 h-4"></i></button>
+                    <button onclick="handleLogout()" class="p-2 bg-red-50 text-red-500 rounded-lg"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+                </div>
             </header>
 
             <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-28 scroll-smooth">
-                <!-- Greeting & Date -->
+                <!-- التحية -->
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-3">
                     <div>
                         <h2 class="text-xl md:text-2xl font-bold text-gray-800">أهلاً، <span id="welcome-name" class="text-[#047857]">...</span> 👋</h2>
                         <div class="flex items-center gap-2 mt-1">
                              <p class="text-xs text-gray-500" id="motivational-text">كيف هي همتك اليوم؟</p>
-                             <span class="read-only-badge px-2 py-0.5 bg-gray-200 text-gray-600 text-[10px] rounded-md font-bold hidden">أرشيف</span>
                         </div>
                     </div>
                     <div class="flex gap-2 items-center bg-white p-1 rounded-lg shadow-sm border border-gray-100 self-end md:self-auto">
@@ -173,8 +137,9 @@
                     </div>
                 </div>
 
-                <!-- Charts & Stats -->
+                <!-- المواقيت + الإحصائيات -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                    <!-- كارت النسبة -->
                     <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col items-center justify-center relative min-h-[140px]">
                         <div class="relative w-32 h-32">
                             <canvas id="performanceChart"></canvas>
@@ -184,39 +149,43 @@
                             </div>
                         </div>
                     </div>
-                    <div class="bg-gradient-to-br from-[#047857] to-[#064E3B] p-5 rounded-2xl shadow-lg text-white relative overflow-hidden lg:col-span-2 flex flex-col justify-center">
-                        <div class="relative z-10">
-                            <div class="flex items-center gap-2 mb-2 opacity-90">
-                                <i data-lucide="sparkles" class="w-4 h-4 text-yellow-300"></i>
-                                <span class="text-xs font-bold text-green-100">رسالة اليوم</span>
-                            </div>
-                            <h3 id="feedback-title" class="text-lg font-bold mb-2">...</h3>
-                            <p id="feedback-body" class="text-green-100 text-xs leading-relaxed mb-4">...</p>
-                            <a id="feedback-link" href="#" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-white text-[#047857] rounded-lg font-bold text-xs hover:bg-green-50 shadow-sm">
-                                <i data-lucide="play-circle" class="w-4 h-4"></i> استمع للشيخ
-                            </a>
-                        </div>
+                    <!-- شريط الصلاة القادمة -->
+                    <div class="bg-gradient-to-br from-[#047857] to-[#064E3B] p-5 rounded-2xl shadow-lg text-white relative overflow-hidden lg:col-span-2 flex flex-col justify-between">
+                         <div class="flex justify-between items-start">
+                             <div>
+                                 <p class="text-green-100 text-xs font-bold mb-1">الصلاة القادمة</p>
+                                 <h3 id="next-prayer-name" class="text-2xl font-bold">...</h3>
+                             </div>
+                             <div class="text-left">
+                                 <p id="next-prayer-time" class="text-3xl font-bold font-mono">--:--</p>
+                                 <button onclick="openPrayerSettingsModal()" class="text-[10px] text-green-200 flex items-center gap-1 mt-1 hover:text-white"><i data-lucide="settings" class="w-3 h-3"></i> إعدادات الأذان</button>
+                             </div>
+                         </div>
+                         <div id="prayer-timeline" class="flex justify-between mt-4 text-[10px] text-green-200 pt-4 border-t border-green-700/50">
+                             <!-- سيتم تعبئته بواسطة JS -->
+                         </div>
                     </div>
                 </div>
 
-                <!-- Adhkar Counter -->
+                <!-- عداد الأذكار -->
                 <div class="mb-8">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2"><div class="w-1 h-5 bg-blue-600 rounded-full"></div><h3 class="text-lg font-bold text-gray-800">الأذكار 📿</h3></div>
-                        <button onclick="toggleAdhkarModal()" id="btn-add-dhikr" class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> إضافة</button>
+                        <button onclick="openModal('adhkar-modal')" id="btn-add-dhikr" class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> إضافة</button>
                     </div>
                     <div id="adhkar-container" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
                 </div>
 
-                <!-- Tasks -->
+                <!-- المهام (الصلوات والسنن) -->
                 <div id="tasks-container" class="space-y-6"></div>
             </div>
         </main>
     </div>
 
-    <!-- Modals (Hidden by default) -->
-    <!-- Adhkar Modal -->
-    <div id="adhkar-modal" class="modal-overlay hidden" onclick="if(event.target === this) toggleAdhkarModal()">
+    <!-- === النوافذ المنبثقة (Modals) === -->
+    
+    <!-- إضافة ذكر -->
+    <div id="adhkar-modal" class="modal-overlay hidden" onclick="if(event.target === this) closeModal('adhkar-modal')">
         <div class="modal-content max-w-xs p-5">
             <h3 class="text-lg font-bold text-gray-800 mb-3">ذكر جديد</h3>
             <input type="text" id="new-dhikr-name" placeholder="اسم الذكر" class="w-full p-2.5 bg-gray-50 rounded-lg border border-gray-200 mb-3 text-sm outline-none focus:border-blue-500">
@@ -225,8 +194,8 @@
         </div>
     </div>
 
-    <!-- Manual Count Modal -->
-    <div id="manual-count-modal" class="modal-overlay hidden" onclick="if(event.target === this) document.getElementById('manual-count-modal').classList.add('hidden')">
+    <!-- تعديل العدد يدوياً -->
+    <div id="manual-count-modal" class="modal-overlay hidden" onclick="if(event.target === this) closeModal('manual-count-modal')">
         <div class="modal-content max-w-xs p-5">
             <h3 class="text-lg font-bold text-gray-800 mb-2">إضافة عدد</h3>
             <input type="number" id="manual-count-input" class="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 mb-4 text-center text-xl font-bold outline-none focus:border-blue-500">
@@ -234,7 +203,45 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- إعدادات الأذان والموقع -->
+    <div id="prayer-settings-modal" class="modal-overlay hidden" onclick="if(event.target === this) closeModal('prayer-settings-modal')">
+        <div class="modal-content">
+            <div class="p-4 border-b bg-gray-50 flex justify-between items-center"><h3 class="font-bold text-[#047857]">إعدادات الصلاة والأذان</h3><button onclick="closeModal('prayer-settings-modal')"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+            <div class="p-4 space-y-4">
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="volume-2" class="w-5 h-5 text-gray-500"></i>
+                        <span class="text-sm font-bold">تفعيل صوت الأذان</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-adhan-sound" class="sr-only peer" onchange="saveAdhanSettings()">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#047857]"></div>
+                    </label>
+                </div>
+
+                <div class="p-3 bg-gray-50 rounded-lg">
+                    <label class="text-xs font-bold text-gray-500 block mb-2">طريقة حساب المواقيت (حسب البلد)</label>
+                    <select id="calculation-method" class="w-full p-2 rounded border text-sm" onchange="saveAdhanSettings()">
+                        <option value="5">الهيئة العامة المصرية للمساحة (مصر)</option>
+                        <option value="4">جامعة أم القرى (مكة المكرمة)</option>
+                        <option value="2">الجمعية الإسلامية لأمريكا الشمالية</option>
+                        <option value="3">رابطة العالم الإسلامي</option>
+                        <option value="1">جامعة العلوم الإسلامية بكراتشي</option>
+                        <option value="12">فرنسا - UOIF</option>
+                        <option value="13">تركيا - Diyanet</option>
+                        <option value="0">المذهب الجعفري</option>
+                    </select>
+                </div>
+                
+                <div class="text-xs text-gray-400 text-center mt-2">
+                    يتم تحديث الموقع تلقائياً بناءً على GPS هاتفك لضمان الدقة.
+                </div>
+            </div>
+            <div class="p-4 border-t"><button onclick="closeModal('prayer-settings-modal')" class="w-full bg-gray-800 text-white py-2 rounded-lg font-bold">إغلاق</button></div>
+        </div>
+    </div>
+
+    <!-- ربط ملف الجافاسكريبت الخارجي -->
     <script src="app.js"></script>
 </body>
 </html>

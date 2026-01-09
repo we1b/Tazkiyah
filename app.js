@@ -1,6 +1,4 @@
-const USE_REAL_FIREBASE = true;
-
-// ⚠️ استبدل هذا ببيانات مشروعك الحقيقية
+// === إعدادات فايربيس ===
 const firebaseConfig = {
     apiKey: "AIzaSyDr1bE57IpBPNz0qCCgb-RxLqsnJ0qPrUw",
     authDomain: "tazkiah-app-33b52.firebaseapp.com",
@@ -21,18 +19,18 @@ let currentDate = new Date();
 
 let prayerTimes = null; 
 let adhanAudio = new Audio('https://www.islamcan.com/audio/adhan/azan2.mp3'); 
-let adhanEnabled = true;
-let adhkarEnabled = true;
+let adhanSettings = { enabled: true, method: 5 }; // 5: الهيئة المصرية (الافتراضي)
 let currentAdhkarEditIndex = null; 
+let openModalsStack = []; // لإدارة زر الرجوع في الموبايل
 
-// === Quran Vars ===
+// === متغيرات القرآن الكريم ===
 let quranAudio = new Audio();
 let currentSurahAyahs = [];
 let currentAyahIndex = 0;
 let verseRepeatCount = 1;
 let currentVerseRepeat = 0;
 let isPlaying = false;
-let currentReciterId = "ar.yasseraldossari"; // Default Reciter
+let currentReciterId = "ar.yasseraldossari";
 
 const RECITERS = {
     "ar.yasseraldossari": "ياسر الدوسري",
@@ -62,31 +60,47 @@ const DEFAULT_USER_DATA = {
     customAdhkar: [] 
 };
 
-// === INIT ===
+// === بدء التشغيل ===
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
     initApp();
+    handleBrowserHistory(); // تفعيل زر الرجوع للمودال
 });
 
 function initApp() {
     if (typeof firebase === 'undefined') return;
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    
+    // تفعيل Offline Persistence (للسرعة)
+    if(firebase.firestore) {
+        db = firebase.firestore();
+        db.enablePersistence({ synchronizeTabs: true }).catch(err => console.log("Persistence disabled:", err.code));
+    }
+    
     auth = firebase.auth();
-    db = firebase.firestore();
 
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
         if (user) {
             currentUser = user;
             showScreen('app-screen');
             currentDate = new Date();
+            
+            // تحميل إعدادات الأذان المحفوظة
+            await loadAdhanSettings();
+            
             loadUserDataForDate(currentDate);
             injectSettingsUI(); 
             injectMobileNav(); 
             initPrayerTimes(); 
             injectQuranModal();
-            injectManualCountModal(); 
-            injectReportModal(); // Ensure report modal exists
+            injectReportModal(); 
             requestNotificationPermission(); 
+            
+            // بيانات الهيدر
+            document.getElementById('user-name-display').innerText = user.displayName || user.email;
+            document.getElementById('user-avatar').innerText = (user.displayName || user.email)[0].toUpperCase();
+            document.getElementById('welcome-name').innerText = (user.displayName || user.email).split(' ')[0];
+
         } else {
             currentUser = null;
             showScreen('landing-screen');
@@ -95,16 +109,77 @@ function initApp() {
     });
 }
 
-function requestNotificationPermission() {
-    if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
+// === تحسين تجربة الهاتف (زر الرجوع) ===
+function handleBrowserHistory() {
+    window.onpopstate = (event) => {
+        if (openModalsStack.length > 0) {
+            const modalId = openModalsStack.pop();
+            document.getElementById(modalId).classList.add('hidden');
+            // منع الرجوع الفعلي للصفحة السابقة إذا كنا فقط نغلق المودال
+            // history.pushState(null, null, window.location.href); 
+        }
+    };
 }
 
-// === PRAYER TIMES ===
+function openModal(modalId) {
+    const el = document.getElementById(modalId);
+    if(el) {
+        el.classList.remove('hidden');
+        openModalsStack.push(modalId);
+        history.pushState({modal: modalId}, null, "");
+    }
+}
+
+function closeModal(modalId) {
+    const el = document.getElementById(modalId);
+    if(el) {
+        el.classList.add('hidden');
+        // إذا كان هذا المودال هو آخر واحد في الستاك، نزيله
+        if (openModalsStack.length > 0 && openModalsStack[openModalsStack.length - 1] === modalId) {
+            openModalsStack.pop();
+            history.back(); // لمحاكاة الرجوع في المتصفح
+        }
+    }
+}
+
+// === إعدادات الأذان والموقع (منفصلة) ===
+function openPrayerSettingsModal() {
+    // تعيين القيم الحالية
+    document.getElementById('toggle-adhan-sound').checked = adhanSettings.enabled;
+    document.getElementById('calculation-method').value = adhanSettings.method;
+    openModal('prayer-settings-modal');
+}
+
+async function loadAdhanSettings() {
+    if(!currentUser) return;
+    try {
+        const doc = await db.collection('users').doc(currentUser.uid).get();
+        if(doc.exists && doc.data().adhanSettings) {
+            adhanSettings = doc.data().adhanSettings;
+        }
+    } catch(e) { console.error("Error loading settings", e); }
+}
+
+async function saveAdhanSettings() {
+    const enabled = document.getElementById('toggle-adhan-sound').checked;
+    const method = parseInt(document.getElementById('calculation-method').value);
+    
+    adhanSettings = { enabled, method };
+    
+    if(currentUser) {
+        await db.collection('users').doc(currentUser.uid).set({ adhanSettings }, { merge: true });
+    }
+    
+    // إعادة جلب المواقيت بالطريقة الجديدة
+    initPrayerTimes();
+}
+
+// === مواقيت الصلاة (محدثة لتأخذ الطريقة) ===
 function initPrayerTimes() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
             fetchPrayerTimes(pos.coords.latitude, pos.coords.longitude);
-        }, () => fetchPrayerTimes(30.0444, 31.2357));
+        }, () => fetchPrayerTimes(30.0444, 31.2357)); // القاهرة افتراضياً
     } else {
         fetchPrayerTimes(30.0444, 31.2357);
     }
@@ -113,7 +188,10 @@ function initPrayerTimes() {
 
 async function fetchPrayerTimes(lat, lng) {
     const date = new Date();
-    const url = `https://api.aladhan.com/v1/timings/${date.getDate()}-${date.getMonth()+1}-${date.getFullYear()}?latitude=${lat}&longitude=${lng}&method=4`;
+    // استخدام طريقة الحساب المختارة من الإعدادات
+    const method = adhanSettings.method || 5; 
+    const url = `https://api.aladhan.com/v1/timings/${date.getDate()}-${date.getMonth()+1}-${date.getFullYear()}?latitude=${lat}&longitude=${lng}&method=${method}`;
+    
     try {
         const res = await fetch(url);
         const data = await res.json();
@@ -127,45 +205,74 @@ async function fetchPrayerTimes(lat, lng) {
 function updatePrayerUI() {
     if (!prayerTimes) return;
     const mapping = { fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' };
+    const arNames = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
+    
+    // Timeline Container
+    const tl = document.getElementById('prayer-timeline');
+    if(tl) tl.innerHTML = '';
+    
+    let nextPrayer = null;
+    let minDiff = Infinity;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
     for (const [key, apiName] of Object.entries(mapping)) {
         const time = prayerTimes[apiName];
         if(!time) continue;
         const [h, m] = time.split(':');
         let hours = parseInt(h);
         const ampm = hours >= 12 ? 'م' : 'ص';
-        hours = hours % 12 || 12; 
+        const displayH = hours % 12 || 12; 
+        
+        // تحديث الوقت في الكروت
         const el = document.getElementById(`time-${key}`);
-        if(el) el.innerText = `${hours}:${m} ${ampm}`;
+        if(el) el.innerText = `${displayH}:${m} ${ampm}`;
+
+        // Timeline
+        if(tl) tl.innerHTML += `<div><span>${arNames[key]}</span><br>${displayH}:${m}</div>`;
+
+        // حساب الصلاة القادمة
+        const prayerMinutes = parseInt(h) * 60 + parseInt(m);
+        let diff = prayerMinutes - currentMinutes;
+        if (diff < 0) diff += 24 * 60; // للصلاة القادمة غداً
+        
+        if (diff < minDiff) {
+            minDiff = diff;
+            nextPrayer = { name: arNames[key], time: `${displayH}:${m} ${ampm}` };
+        }
+    }
+
+    if(nextPrayer) {
+        document.getElementById('next-prayer-name').innerText = nextPrayer.name;
+        document.getElementById('next-prayer-time').innerText = nextPrayer.time;
     }
 }
 
 function checkTimeForAlerts() {
-    if(!prayerTimes) return;
+    if(!prayerTimes || !adhanSettings.enabled) return;
     const now = new Date();
     const currentH = now.getHours();
     const currentM = now.getMinutes();
     
-    if(adhanEnabled) {
-        ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
-            const [h, m] = prayerTimes[p].split(':');
-            if (parseInt(h) === currentH && parseInt(m) === currentM) playAdhan(p);
-        });
-    }
+    ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
+        const [h, m] = prayerTimes[p].split(':');
+        if (parseInt(h) === currentH && parseInt(m) === currentM) playAdhan(p);
+    });
 }
 
 function playAdhan(name) {
     adhanAudio.play().catch(()=>{});
     if (Notification.permission === "granted") new Notification(`📢 حان موعد ${name}`);
-    alert(`حان موعد صلاة ${name}`);
 }
 
-// === QURAN (Improved) ===
+// === القرآن الكريم ===
 function injectQuranModal() {
     if (document.getElementById('quran-modal')) return;
     const modal = document.createElement('div');
     modal.id = 'quran-modal';
     modal.className = 'modal-overlay hidden';
-    modal.onclick = (e) => { if(e.target === modal) closeQuran(); };
+    // modal.onclick handled by handleBrowserHistory logic mostly, but explicit click too:
+    modal.onclick = (e) => { if(e.target === modal) closeModal('quran-modal'); };
     
     let options = '';
     for (const [k, v] of Object.entries(RECITERS)) options += `<option value="${k}">${v}</option>`;
@@ -180,7 +287,7 @@ function injectQuranModal() {
                 </div>
                 <div class="flex gap-2 items-center">
                     <select id="reciter-select" class="p-2 rounded border text-xs w-24" onchange="currentReciterId=this.value; if(currentSurahAyahs.length) playVerse(currentAyahIndex);">${options}</select>
-                    <button onclick="closeQuran()" class="text-gray-500 p-2"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    <button onclick="closeModal('quran-modal')" class="text-gray-500 p-2"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
             </div>
             <div id="quran-content" class="flex-1 overflow-y-auto p-4 text-center bg-white text-lg leading-loose font-serif">
@@ -197,7 +304,7 @@ function injectQuranModal() {
         </div>`;
     document.body.appendChild(modal);
     
-    // Load Surah List
+    // تحميل السور
     fetch('https://api.alquran.cloud/v1/surah').then(r=>r.json()).then(d => {
         const sel = document.getElementById('surah-select');
         d.data.forEach(s => {
@@ -218,26 +325,23 @@ function injectQuranModal() {
     });
 }
 
+// ... (نفس دوال القرآن: loadSurah, playVerse, togglePlay, etc. كما هي في الكود السابق)
 async function loadSurah(num) {
     if(!num) return;
     const div = document.getElementById('quran-content');
     div.innerHTML = '<div class="text-center mt-10">جاري التحميل...</div>';
-    
     try {
         const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}/${currentReciterId}`);
         const data = await res.json();
         currentSurahAyahs = data.data.ayahs;
         currentAyahIndex = 0;
-        
         let html = `<div class="max-w-2xl mx-auto text-justify" style="direction: rtl;">`;
         if(num!=1 && num!=9) html += `<div class="text-center mb-4 text-sm text-gray-500">بسم الله الرحمن الرحيم</div>`;
-        
         currentSurahAyahs.forEach((a, i) => {
             const txt = a.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '').trim();
             html += `<span id="ayah-${i}" class="cursor-pointer hover:text-green-600 transition-colors" onclick="playVerse(${i})">${txt} <span class="text-green-600 text-sm">(${a.numberInSurah})</span> </span>`;
         });
         html += `</div>`;
-        
         div.innerHTML = html;
         document.getElementById('audio-player-bar').classList.remove('hidden');
     } catch(e) { div.innerHTML = 'حدث خطأ في التحميل'; }
@@ -247,16 +351,12 @@ function playVerse(i) {
     if(i < 0 || i >= currentSurahAyahs.length) return;
     currentAyahIndex = i;
     const a = currentSurahAyahs[i];
-    
-    // Fallback for audio
     const url = a.audio || (a.audioSecondary ? a.audioSecondary[0] : null);
     if(url) {
         quranAudio.src = url;
         quranAudio.play();
         isPlaying = true;
         updatePlayIcon();
-        
-        // Highlight
         document.querySelectorAll('#quran-content span').forEach(s => s.classList.remove('bg-green-100'));
         const el = document.getElementById(`ayah-${i}`);
         if(el) {
@@ -266,18 +366,12 @@ function playVerse(i) {
         document.getElementById('player-status').innerText = `الآية ${a.numberInSurah}`;
     }
 }
-
 function togglePlay() { if(isPlaying) quranAudio.pause(); else quranAudio.play(); isPlaying = !isPlaying; updatePlayIcon(); }
-function updatePlayIcon() { 
-    const i = document.querySelector('#play-btn i');
-    if(i) i.setAttribute('data-lucide', isPlaying ? 'pause' : 'play');
-    lucide.createIcons();
-}
+function updatePlayIcon() { const i = document.querySelector('#play-btn i'); if(i) i.setAttribute('data-lucide', isPlaying ? 'pause' : 'play'); lucide.createIcons(); }
 function nextVerse() { playVerse(currentAyahIndex + 1); }
 function prevVerse() { playVerse(currentAyahIndex - 1); }
-function closeQuran() { document.getElementById('quran-modal').classList.add('hidden'); quranAudio.pause(); }
 
-// === UI Helpers ===
+// === واجهة المستخدم ===
 function injectMobileNav() {
     if (document.getElementById('mobile-bottom-nav')) return;
     const nav = document.createElement('div');
@@ -285,9 +379,9 @@ function injectMobileNav() {
     nav.className = 'md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 flex justify-around items-center h-16';
     nav.innerHTML = `
         <button onclick="showScreen('app-screen')" class="flex flex-col items-center w-full text-[#047857]"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] mt-1">يوميتي</span></button>
-        <button onclick="document.getElementById('quran-modal').classList.remove('hidden')" class="flex flex-col items-center w-full text-gray-500 hover:text-[#047857]"><i data-lucide="book-open" class="w-5 h-5"></i><span class="text-[9px] mt-1">المصحف</span></button>
+        <button onclick="openModal('quran-modal')" class="flex flex-col items-center w-full text-gray-500 hover:text-[#047857]"><i data-lucide="book-open" class="w-5 h-5"></i><span class="text-[9px] mt-1">المصحف</span></button>
         <button onclick="openReportModal()" class="flex flex-col items-center w-full text-gray-500 hover:text-[#047857]"><i data-lucide="bar-chart-2" class="w-5 h-5"></i><span class="text-[9px] mt-1">تقارير</span></button>
-        <button onclick="openSettingsModal()" class="flex flex-col items-center w-full text-gray-500 hover:text-[#047857]"><i data-lucide="settings" class="w-5 h-5"></i><span class="text-[9px] mt-1">إعدادات</span></button>`;
+        <button onclick="openSettingsModal()" class="flex flex-col items-center w-full text-gray-500 hover:text-[#047857]"><i data-lucide="sliders" class="w-5 h-5"></i><span class="text-[9px] mt-1">تخصيص</span></button>`;
     document.body.appendChild(nav);
     lucide.createIcons();
 }
@@ -296,34 +390,33 @@ function injectSettingsUI() {
     const sidebar = document.getElementById('sidebar-content');
     if (sidebar && !document.getElementById('btn-settings-pc')) {
         sidebar.innerHTML += `
-            <button onclick="openSettingsModal()" id="btn-settings-pc" class="w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all"><i data-lucide="settings"></i> إعدادات العبادات</button>
+            <button onclick="openSettingsModal()" id="btn-settings-pc" class="w-full flex items-center gap-4 px-6 py-4 text-gray-600 hover:bg-gray-50 hover:text-[#047857] rounded-l-2xl font-bold transition-all"><i data-lucide="sliders"></i> تخصيص العبادات</button>
         `;
         lucide.createIcons();
     }
     
-    // Settings Modal
     if (!document.getElementById('settings-modal')) {
         const div = document.createElement('div');
         div.id = 'settings-modal';
         div.className = 'modal-overlay hidden';
-        div.onclick = (e) => { if(e.target === div) div.classList.add('hidden'); };
+        div.onclick = (e) => { if(e.target === div) closeModal('settings-modal'); };
         div.innerHTML = `
             <div class="modal-content">
-                <div class="p-4 border-b bg-gray-50 flex justify-between items-center"><h3 class="font-bold">إعدادات العبادات</h3><button onclick="document.getElementById('settings-modal').classList.add('hidden')"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+                <div class="p-4 border-b bg-gray-50 flex justify-between items-center"><h3 class="font-bold">تخصيص العبادات</h3><button onclick="closeModal('settings-modal')"><i data-lucide="x" class="w-5 h-5"></i></button></div>
                 <div class="p-4 overflow-y-auto max-h-[60vh]" id="settings-list"></div>
-                <div class="p-4 border-t"><button onclick="saveSettings()" class="w-full bg-[#047857] text-white py-2 rounded-lg font-bold">حفظ</button></div>
+                <div class="p-4 border-t"><button onclick="saveSettings()" class="w-full bg-[#047857] text-white py-2 rounded-lg font-bold">حفظ التغييرات</button></div>
             </div>`;
         document.body.appendChild(div);
     }
 }
 
-// === REPORT MODAL & LOGIC ===
+// === التقارير (محسنة - Real Data) ===
 function injectReportModal() {
     if (document.getElementById('report-modal')) return;
     const div = document.createElement('div');
     div.id = 'report-modal';
     div.className = 'modal-overlay hidden';
-    div.onclick = (e) => { if(e.target === div) div.classList.add('hidden'); };
+    div.onclick = (e) => { if(e.target === div) closeModal('report-modal'); };
     
     div.innerHTML = `
         <div class="modal-content max-w-4xl h-[90vh] flex-col md:flex-row">
@@ -335,8 +428,7 @@ function injectReportModal() {
                     <button onclick="generateReport('month')" class="flex-1 py-1.5 rounded text-gray-600">شهري</button>
                 </div>
                 <div class="space-y-2">
-                    <button onclick="downloadAsPDF()" class="w-full py-2 border rounded-lg text-xs flex items-center justify-center gap-2 hover:bg-white"><i data-lucide="file-text" class="w-3 h-3"></i> PDF</button>
-                    <button onclick="downloadAsImage()" class="w-full py-2 border rounded-lg text-xs flex items-center justify-center gap-2 hover:bg-white"><i data-lucide="image" class="w-3 h-3"></i> صورة</button>
+                    <button onclick="downloadAsPDF()" class="w-full py-2 border rounded-lg text-xs flex items-center justify-center gap-2 hover:bg-white"><i data-lucide="file-text" class="w-3 h-3"></i> تحميل PDF</button>
                 </div>
             </div>
             <div class="w-full md:w-2/3 p-4 overflow-y-auto bg-gray-100 flex justify-center">
@@ -359,7 +451,7 @@ function injectReportModal() {
 }
 
 function openReportModal() {
-    document.getElementById('report-modal').classList.remove('hidden');
+    openModal('report-modal');
     generateReport('day');
 }
 
@@ -369,7 +461,6 @@ async function generateReport(period) {
     const percent = document.getElementById('rep-percent');
     const list = document.getElementById('rep-list');
     
-    // Reset Chart
     if (reportChartInstance) { reportChartInstance.destroy(); reportChartInstance = null; }
     
     if (period === 'day') {
@@ -377,13 +468,12 @@ async function generateReport(period) {
         date.innerText = getReadableDate(currentDate);
         if(lastUserData) {
             percent.innerText = document.getElementById('chart-percent').innerText;
-            document.getElementById('rep-adhkar').innerText = document.getElementById('total-adhkar-count').innerText;
+            const adhkCount = document.getElementById('total-adhkar-count')?.innerText || '0';
+            document.getElementById('rep-adhkar').innerText = adhkCount;
             
-            // List
             list.innerHTML = '';
             for(const [k,v] of Object.entries(lastUserData.prayers)) if(v) list.innerHTML += `<li class="text-green-700">✅ صلاة ${k}</li>`;
             
-            // Chart (Doughnut)
             const p = parseInt(percent.innerText);
             const ctx = document.getElementById('reportChart');
             reportChartInstance = new Chart(ctx, {
@@ -393,17 +483,18 @@ async function generateReport(period) {
             });
         }
     } else {
-        // Weekly/Monthly Logic
         const days = period === 'week' ? 7 : 30;
         title.innerText = period === 'week' ? "تقرير أسبوعي" : "تقرير شهري";
         date.innerText = `آخر ${days} يوم`;
+        
+        // إظهار تحميل بسيط
+        list.innerHTML = '<li class="text-gray-500 text-center">جاري جلب البيانات...</li>';
         
         const stats = await fetchAggregateData(days);
         percent.innerText = stats.percent + "%";
         document.getElementById('rep-adhkar').innerText = stats.totalAdhkar;
         list.innerHTML = `<li class="text-gray-600">متوسط الأداء: ${stats.percent}%</li><li class="text-gray-600">إجمالي الأذكار: ${stats.totalAdhkar}</li>`;
         
-        // Chart (Bar)
         const ctx = document.getElementById('reportChart');
         reportChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -420,26 +511,50 @@ async function fetchAggregateData(days) {
     let totalP = 0; let totalA = 0; let count = 0; const hist = [];
     const d = new Date();
     
+    // استخدام Promise.all لجلب البيانات بالتوازي لزيادة السرعة
+    const promises = [];
+    const dateLabels = [];
+
     for(let i=days-1; i>=0; i--) {
         const tempD = new Date(); tempD.setDate(d.getDate() - i);
         const did = getFormattedDateID(tempD);
-        const doc = await db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did).get();
+        dateLabels.push(tempD.getDate());
+        promises.push(db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did).get());
+    }
+
+    const docs = await Promise.all(promises);
+
+    docs.forEach((doc, index) => {
         let val = 0;
         if(doc.exists) {
             const da = doc.data();
-            // Calculate simple %
             let done=0, tot=0;
             if(da.prayers) Object.values(da.prayers).forEach(v=>{tot++; if(v) done++});
             if(da.customAdhkar) da.customAdhkar.forEach(a=> totalA += (a.count||0));
             val = tot>0 ? Math.round((done/tot)*100) : 0;
-            totalP += val; count++;
+            totalP += val; 
+            count++;
         }
-        hist.push({ label: tempD.getDate(), val });
-    }
-    return { percent: count?Math.round(totalP/count):0, totalAdhkar: totalA, history: hist };
+        hist.push({ label: dateLabels[index], val });
+    });
+
+    return { percent: count ? Math.round(totalP/count) : 0, totalAdhkar: totalA, history: hist };
 }
 
-// === MAIN LOGIC ===
+function downloadAsPDF() {
+    const { jsPDF } = window.jspdf;
+    const content = document.getElementById('report-preview-content');
+    html2canvas(content).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const width = pdf.internal.pageSize.getWidth();
+        const height = (canvas.height * width) / canvas.width;
+        pdf.addImage(imgData, 'PNG', 0, 10, width, height);
+        pdf.save("report.pdf");
+    });
+}
+
+// === المنطق الرئيسي ===
 function getFormattedDateID(d) { return d.toISOString().split('T')[0]; }
 function getReadableDate(d) { return d.toLocaleDateString('ar-EG'); }
 function isToday(d) { return getFormattedDateID(d) === getFormattedDateID(new Date()); }
@@ -455,11 +570,15 @@ function loadUserDataForDate(date) {
             renderMainUI(lastUserData);
         } else {
             if(isToday(date)) {
-                // Load settings from root
+                // تحميل الإعدادات من الملف الرئيسي (لضمان الثبات)
                 const root = await db.collection('users').doc(currentUser.uid).get();
+                // استخدم الإعدادات المحفوظة أو الافتراضية
                 const settings = root.data()?.habitSettings || DEFAULT_USER_DATA.habitSettings;
                 const templates = root.data()?.customAdhkarTemplates || [];
+                
                 const newData = { ...DEFAULT_USER_DATA, habitSettings: settings, customAdhkar: templates.map(t=>({name:t.name, target:t.target, count:0})) };
+                
+                // إنشاء سجل جديد لليوم
                 db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did).set(newData);
             } else {
                 lastUserData = DEFAULT_USER_DATA;
@@ -470,7 +589,7 @@ function loadUserDataForDate(date) {
 }
 
 function renderMainUI(data) {
-    // 1. Prayers
+    // 1. الصلوات
     const pc = document.getElementById('tasks-container'); pc.innerHTML = '';
     const pMap = { fajr:'الفجر', dhuhr:'الظهر', asr:'العصر', maghrib:'المغرب', isha:'العشاء' };
     
@@ -481,15 +600,15 @@ function renderMainUI(data) {
             ${v ? '<i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>' : '<i data-lucide="circle" class="w-5 h-5 text-gray-300"></i>'}
         </div>`;
     }
-    // Quran
+    // قرآن
     const q = data.quran || false;
     html += `<div onclick="toggleTask('root','quran',${!q})" class="bg-white p-3 rounded-xl border flex items-center justify-between cursor-pointer ${q?'border-green-500 bg-green-50':'border-gray-100'}">
-        <div><p class="font-bold text-sm ${q?'text-green-700':'text-gray-600'}">ورد القرآن</p><span class="text-[10px] text-blue-500" onclick="event.stopPropagation(); openQuran()">📖 قراءة</span></div>
+        <div><p class="font-bold text-sm ${q?'text-green-700':'text-gray-600'}">ورد القرآن</p><span class="text-[10px] text-blue-500" onclick="event.stopPropagation(); openModal('quran-modal')">📖 قراءة</span></div>
         ${q ? '<i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>' : '<i data-lucide="circle" class="w-5 h-5 text-gray-300"></i>'}
     </div>`;
     html += `</div>`;
     
-    // Habits
+    // السنن (حسب الإعدادات)
     html += `<h3 class="font-bold text-sm mb-3">السنن</h3><div class="grid grid-cols-2 gap-3">`;
     const settings = data.habitSettings || DEFAULT_USER_DATA.habitSettings;
     for(const [k, meta] of Object.entries(HABITS_META)) {
@@ -504,7 +623,7 @@ function renderMainUI(data) {
     html += `</div>`;
     pc.innerHTML = html;
     
-    // Adhkar
+    // الأذكار
     const ac = document.getElementById('adhkar-container'); ac.innerHTML = '';
     let totalA = 0;
     (data.customAdhkar || []).forEach((a, i) => {
@@ -519,9 +638,12 @@ function renderMainUI(data) {
             <div class="absolute bottom-0 left-0 h-1 bg-blue-100 w-full"><div style="width:${pct}%" class="h-full bg-blue-500"></div></div>
         </div>`;
     });
-    document.getElementById('total-adhkar-count').innerText = totalA;
     
-    // Stats & Chart
+    // تخزين المجموع في عنصر مخفي لاستخدامه في التقارير
+    const totalEl = document.getElementById('total-adhkar-count');
+    if(!totalEl) { const s = document.createElement('span'); s.id='total-adhkar-count'; s.style.display='none'; document.body.appendChild(s); s.innerText=totalA; }
+    else totalEl.innerText = totalA;
+    
     updateDashboardStats(data);
     lucide.createIcons();
     updatePrayerUI();
@@ -549,7 +671,7 @@ function updateDashboardStats(data) {
     }
 }
 
-// === Actions ===
+// === التفاعلات ===
 function toggleTask(cat, k, v) {
     if(!isToday(currentDate)) return;
     const did = getFormattedDateID(currentDate);
@@ -568,7 +690,7 @@ async function incrementAdhkar(i) {
 async function removeAdhkar(i) {
     if(!isToday(currentDate)) return;
     if(!confirm('حذف؟')) return;
-    // Remove from root template too
+    
     const root = db.collection('users').doc(currentUser.uid);
     const rd = await root.get();
     const t = rd.data().customAdhkarTemplates || [];
@@ -580,7 +702,59 @@ async function removeAdhkar(i) {
     const list = d.data().customAdhkar; list.splice(i,1);
     ref.update({ customAdhkar: list });
 }
-function openManualCountModal(i) { currentAdhkarEditIndex=i; document.getElementById('manual-count-modal').classList.remove('hidden'); }
+
+async function addNewDhikr() {
+    const name = document.getElementById('new-dhikr-name').value;
+    const target = parseInt(document.getElementById('new-dhikr-target').value);
+    if(name && target) {
+        const root = db.collection('users').doc(currentUser.uid);
+        const rd = await root.get();
+        const t = rd.data()?.customAdhkarTemplates || [];
+        t.push({ name, target });
+        await root.set({ customAdhkarTemplates: t }, { merge: true });
+        
+        if(isToday(currentDate)) {
+            const did = getFormattedDateID(currentDate);
+            const ref = root.collection('daily_logs').doc(did);
+            const doc = await ref.get();
+            const list = doc.data()?.customAdhkar || [];
+            list.push({ name, target, count: 0 });
+            await ref.update({ customAdhkar: list });
+        }
+        document.getElementById('new-dhikr-name').value = '';
+        document.getElementById('new-dhikr-target').value = '';
+        closeModal('adhkar-modal');
+    }
+}
+
+// === إعدادات العبادات (حفظ ثابت) ===
+function openSettingsModal() { 
+    if(!lastUserData) return; 
+    const c = document.getElementById('settings-list'); c.innerHTML=''; 
+    const s = lastUserData.habitSettings || {};
+    for(const [k,m] of Object.entries(HABITS_META)) {
+        c.innerHTML += `<div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2"><span class="text-sm font-bold">${m.name}</span><input type="checkbox" class="setting-toggle" data-key="${k}" ${s[k]?'checked':''}></div>`;
+    }
+    openModal('settings-modal'); 
+}
+
+async function saveSettings() {
+    const toggles = document.querySelectorAll('.setting-toggle');
+    const newSettings = {};
+    toggles.forEach(t => newSettings[t.dataset.key] = t.checked);
+    
+    // 1. حفظ في ملف المستخدم الرئيسي (ليستمر للأيام القادمة)
+    await db.collection('users').doc(currentUser.uid).set({ habitSettings: newSettings }, { merge: true });
+    
+    // 2. تحديث اليوم الحالي ليظهر التغيير فوراً
+    const did = getFormattedDateID(currentDate);
+    await db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did).update({ habitSettings: newSettings });
+    
+    closeModal('settings-modal');
+}
+
+// === مساعدات عامة ===
+function openManualCountModal(i) { currentAdhkarEditIndex=i; openModal('manual-count-modal'); }
 async function saveManualCount() {
     const val = parseInt(document.getElementById('manual-count-input').value);
     if(val && currentAdhkarEditIndex!==null) {
@@ -591,28 +765,29 @@ async function saveManualCount() {
         list[currentAdhkarEditIndex].count += val;
         await ref.update({ customAdhkar: list });
     }
-    document.getElementById('manual-count-modal').classList.add('hidden');
+    closeModal('manual-count-modal');
 }
+
 function hideLoader() { const l=document.getElementById('loader'); if(l) l.style.display='none'; }
 function showScreen(id) { ['landing-screen','auth-screen','app-screen'].forEach(i=>document.getElementById(i).classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
 function goToAuth(m){ showScreen('auth-screen'); if(m==='login'){ document.getElementById('login-form').classList.remove('hidden'); document.getElementById('register-form').classList.add('hidden'); } else { document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); } }
 function showLandingScreen(){ showScreen('landing-screen'); }
-async function handleLogin(e){ e.preventDefault(); auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-password').value).catch(e=>alert(e.message)); }
-async function handleRegister(e){ e.preventDefault(); const n=document.getElementById('reg-name').value; auth.createUserWithEmailAndPassword(document.getElementById('reg-email').value, document.getElementById('reg-password').value).then(c=>c.user.updateProfile({displayName:n})).catch(e=>alert(e.message)); }
+function switchAuthMode(m) { 
+    if(m==='reset') {
+        document.getElementById('login-form').classList.add('hidden'); 
+        document.getElementById('register-form').classList.add('hidden');
+        document.getElementById('reset-form').classList.remove('hidden');
+        return;
+    }
+    document.getElementById('reset-form').classList.add('hidden');
+    goToAuth(m); 
+    document.getElementById('tab-login').className = m==='login' ? "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white text-[#047857] shadow-sm" : "flex-1 py-2.5 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 transition-all";
+    document.getElementById('tab-register').className = m==='register' ? "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white text-[#047857] shadow-sm" : "flex-1 py-2.5 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 transition-all";
+}
+
+async function handleLogin(e){ e.preventDefault(); auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-password').value).catch(e=>alert("خطأ: " + e.message)); }
+async function handleRegister(e){ e.preventDefault(); const n=document.getElementById('reg-name').value; auth.createUserWithEmailAndPassword(document.getElementById('reg-email').value, document.getElementById('reg-password').value).then(c=>c.user.updateProfile({displayName:n})).catch(e=>alert("خطأ: " + e.message)); }
+async function handleResetPassword(e) { e.preventDefault(); const em = document.getElementById('reset-email').value; auth.sendPasswordResetEmail(em).then(()=>alert('تم إرسال رابط الاستعادة')).catch(e=>alert(e.message)); }
+
 function handleLogout(){ auth.signOut(); showLandingScreen(); }
 function changeDate(d) { const n = new Date(currentDate); n.setDate(n.getDate()+d); if(n>new Date()) return; currentDate=n; loadUserDataForDate(n); }
-function toggleAdhkarModal(){ const m=document.getElementById('adhkar-modal'); m.classList.toggle('hidden'); }
-function closeSettingsModal() { 
-    document.getElementById('settings-modal').classList.add('hidden');
-    // Refresh main UI to show changes immediately
-    if(lastUserData) renderMainUI(lastUserData); 
-}
-function openSettingsModal() { 
-    if(!lastUserData) return; 
-    const c = document.getElementById('settings-list'); c.innerHTML=''; 
-    const s = lastUserData.habitSettings || {};
-    for(const [k,m] of Object.entries(HABITS_META)) {
-        c.innerHTML += `<div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2"><span class="text-sm font-bold">${m.name}</span><input type="checkbox" class="setting-toggle" data-key="${k}" ${s[k]?'checked':''}></div>`;
-    }
-    document.getElementById('settings-modal').classList.remove('hidden'); 
-}
