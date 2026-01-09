@@ -39,7 +39,7 @@
 
         /* خلفية بنمط خفيف */
         .bg-pattern {
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23047857' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23047857' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
 
         /* Animations */
@@ -365,12 +365,13 @@
         };
 
         const HABITS_META = {
-            rawatib: { name: 'السنن (12)', icon: 'layers' },
-            duha: { name: 'الضحى', icon: 'sun' },
-            witr: { name: 'الوتر', icon: 'moon' },
+            rawatib: { name: 'السنن (12 ركعة)', icon: 'layers' },
+            duha: { name: 'صلاة الضحى', icon: 'sun' },
+            witr: { name: 'صلاة الوتر', icon: 'moon' },
+            qiyam: { name: 'قيام الليل', icon: 'star' },
             azkar_m: { name: 'أذكار الصباح', icon: 'sunrise' },
             azkar_e: { name: 'أذكار المساء', icon: 'sunset' },
-            azkar_s: { name: 'أذكار النوم', icon: 'star' },
+            azkar_s: { name: 'أذكار النوم', icon: 'bed' },
             fasting_mon: { name: 'صيام الاثنين', icon: 'calendar' },
             fasting_thu: { name: 'صيام الخميس', icon: 'calendar' }
         };
@@ -378,8 +379,8 @@
         const DEFAULT_USER_DATA = {
             prayers: { fajr: false, dhuhr: false, asr: false, maghrib: false, isha: false },
             quran: false,
-            habits: { rawatib: false, duha: false, witr: false, azkar_m: false, azkar_e: false, azkar_s: false },
-            habitSettings: { rawatib: true, duha: true, witr: true, azkar_m: true, azkar_e: true, azkar_s: true },
+            habits: { rawatib: false, duha: false, witr: false, qiyam: false, azkar_m: false, azkar_e: false, azkar_s: false },
+            habitSettings: { rawatib: true, duha: true, witr: true, qiyam: true, azkar_m: true, azkar_e: true, azkar_s: true },
             customAdhkar: [] 
         };
 
@@ -918,20 +919,20 @@
             let html = `<div class="grid grid-cols-2 gap-3 mb-6">`;
             for(const [k, v] of Object.entries(data.prayers)) {
                 html += `<div onclick="toggleTask('prayers','${k}',${!v})" class="bg-white p-3 rounded-xl border flex items-center justify-between cursor-pointer ${v?'border-green-500 bg-green-50':'border-gray-100'}">
-                    <div><p class="font-bold text-sm ${v?'text-green-700':'text-gray-600'}">${pMap[k]}</p><p id="time-${k}" class="text-[10px] text-gray-400">--:--</p></div>
+                    <div><p class="font-bold text-sm ${v?'text-green-700':'text-gray-600'}">${pMap[k]} <span class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">فرض</span></p><p id="time-${k}" class="text-[10px] text-gray-400">--:--</p></div>
                     ${v ? '<i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>' : '<i data-lucide="circle" class="w-5 h-5 text-gray-300"></i>'}
                 </div>`;
             }
             // قرآن
             const q = data.quran || false;
             html += `<div onclick="toggleTask('root','quran',${!q})" class="bg-white p-3 rounded-xl border flex items-center justify-between cursor-pointer ${q?'border-green-500 bg-green-50':'border-gray-100'}">
-                <div><p class="font-bold text-sm ${q?'text-green-700':'text-gray-600'}">ورد القرآن</p><span class="text-[10px] text-blue-500" onclick="event.stopPropagation(); openModal('quran-modal')">📖 قراءة</span></div>
+                <div><p class="font-bold text-sm ${q?'text-green-700':'text-gray-600'}">ورد القرآن <span class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">أساسي</span></p><span class="text-[10px] text-blue-500" onclick="event.stopPropagation(); openModal('quran-modal')">📖 قراءة</span></div>
                 ${q ? '<i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>' : '<i data-lucide="circle" class="w-5 h-5 text-gray-300"></i>'}
             </div>`;
             html += `</div>`;
             
             // السنن (حسب الإعدادات)
-            html += `<h3 class="font-bold text-sm mb-3">السنن</h3><div class="grid grid-cols-2 gap-3">`;
+            html += `<h3 class="font-bold text-sm mb-3">السنن والعادات</h3><div class="grid grid-cols-2 gap-3">`;
             const settings = data.habitSettings || DEFAULT_USER_DATA.habitSettings;
             for(const [k, meta] of Object.entries(HABITS_META)) {
                 if(settings[k]) {
