@@ -23,7 +23,7 @@ let nextPrayer = null;
 let adhanAudio = new Audio('https://www.islamcan.com/audio/adhan/azan2.mp3'); 
 let adhanEnabled = true;
 let adhkarEnabled = true;
-let currentAdhkarEditIndex = null; // لتخزين مؤشر الذكر المراد تعديله
+let currentAdhkarEditIndex = null; 
 
 // === متغيرات المصحف ===
 let quranAudio = new Audio();
@@ -83,7 +83,7 @@ function initApp() {
             showScreen('app-screen');
             currentDate = new Date();
             loadUserDataForDate(currentDate);
-            injectSettingsUI(); // سيقوم أيضاً بإضافة زر المصحف
+            injectSettingsUI(); 
             injectMobileNav(); 
             initPrayerTimes(); 
             injectQuranModal();
@@ -208,7 +208,7 @@ function sendAdhkarNotification(title, body) {
     if (Notification.permission === "granted") new Notification(title, { body: body });
 }
 
-// === 2. Quran Modal (Updated UX: Click Outside to Close) ===
+// === 2. Quran Modal (Updated UX: Click Outside to Close & Fallback) ===
 function injectQuranModal() {
     if (document.getElementById('quran-modal')) return;
     const modal = document.createElement('div');
@@ -281,14 +281,22 @@ function changeReciter(reciterKey) {
     if (currentSurahAyahs.length > 0) playVerse(currentAyahIndex);
 }
 
+// === Updated loadSurah with Fallback ===
 async function loadSurah(number) {
     if(!number) return;
     const container = document.getElementById('quran-content');
     container.innerHTML = '<div class="text-center p-10"><div class="animate-spin w-8 h-8 border-4 border-[#047857] border-t-transparent rounded-full mx-auto"></div></div>';
     
     try {
-        // تحديث: إضافة quran-uthmani لضمان تحميل النص العثماني الصحيح
-        const res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/quran-uthmani`);
+        // محاولة أولى: الرسم العثماني
+        let res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/quran-uthmani`);
+        
+        // إذا فشل (مثل 404 أو خطأ خادم)، نحاول الرسم البسيط
+        if (!res.ok) {
+            console.warn("فشل تحميل الرسم العثماني، جاري محاولة الرسم البسيط...");
+            res = await fetch(`https://api.alquran.cloud/v1/surah/${number}/quran-simple`);
+        }
+
         if (!res.ok) throw new Error("فشل التحميل من المصدر");
         
         const data = await res.json();
@@ -310,7 +318,12 @@ async function loadSurah(number) {
         playVerse(0);
     } catch(e) { 
         console.error(e);
-        container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-red-500"><i data-lucide="wifi-off" class="w-12 h-12 mb-2"></i><p>حدث خطأ في تحميل السورة. تأكد من اتصال الإنترنت.</p></div>`;
+        container.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full text-red-500">
+                <i data-lucide="wifi-off" class="w-12 h-12 mb-2"></i>
+                <p>حدث خطأ في تحميل السورة.</p>
+                <button onclick="loadSurah(${number})" class="mt-4 px-4 py-2 bg-red-100 rounded-lg hover:bg-red-200 text-red-700 font-bold">إعادة المحاولة</button>
+            </div>`;
         lucide.createIcons();
     }
 }
@@ -321,6 +334,7 @@ function playVerse(index) {
     const ayah = currentSurahAyahs[index];
     const surahNum = String(ayah.surah.number).padStart(3, '0');
     const ayahNum = String(ayah.numberInSurah).padStart(3, '0');
+    // Ensure HTTPS
     const url = `https://www.everyayah.com/data/${currentReciterUrl}/${surahNum}${ayahNum}.mp3`;
     quranAudio.src = url;
     quranAudio.play().catch(e => console.log("User interaction required for audio"));
