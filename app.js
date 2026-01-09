@@ -136,22 +136,18 @@ function updatePrayerUI() {
 }
 
 function checkTimeForAlerts() {
-    if(!prayerTimes) return;
+    if(!prayerTimes || !adhanEnabled) return;
     const now = new Date();
     const currentH = now.getHours();
     const currentM = now.getMinutes();
     
-    if(adhanEnabled) {
-        ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
-            const [h, m] = prayerTimes[p].split(':');
-            if (parseInt(h) === currentH && parseInt(m) === currentM) playAdhan(p);
-        });
-    }
-}
-
-function playAdhan(name) {
-    adhanAudio.play().catch(()=>{});
-    if (Notification.permission === "granted") new Notification(`📢 حان موعد ${name}`);
+    ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].forEach(p => {
+        const [h, m] = prayerTimes[p].split(':');
+        if (parseInt(h) === currentH && parseInt(m) === currentM) {
+            adhanAudio.play().catch(()=>{});
+            if (Notification.permission === "granted") new Notification(`📢 حان موعد ${p}`);
+        }
+    });
 }
 
 // === QURAN LOGIC ===
@@ -188,7 +184,7 @@ function changeReciter(id) { currentReciterId = id; if(currentSurahAyahs.length)
 async function loadSurah(num) {
     if(!num) return;
     const div = document.getElementById('quran-content');
-    div.innerHTML = '<div class="text-center mt-10 text-gray-500">جاري التحميل...</div>';
+    div.innerHTML = '<div class="text-center mt-10">جاري التحميل...</div>';
     
     try {
         const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}/${currentReciterId}`);
@@ -235,7 +231,7 @@ function prevVerse() { playVerse(currentAyahIndex - 1); }
 function toggleQuranModal() { const m=document.getElementById('quran-modal'); if(m.classList.contains('hidden')) m.classList.remove('hidden'); else { m.classList.add('hidden'); quranAudio.pause(); } }
 function closeQuran() { document.getElementById('quran-modal').classList.add('hidden'); quranAudio.pause(); }
 
-// ... Main Logic (Date, Load, Render) ...
+// ... Main Logic (Date, Load, Render, Persistence) ...
 function getFormattedDateID(d) { return d.toISOString().split('T')[0]; }
 function getReadableDate(d) { return d.toLocaleDateString('ar-EG'); }
 function isToday(d) { return getFormattedDateID(d) === getFormattedDateID(new Date()); }
@@ -247,6 +243,8 @@ function updateDateUI() {
     if(ro) { tasks.classList.add('opacity-75', 'pointer-events-none'); document.querySelector('.read-only-badge').style.display = 'inline-flex'; }
     else { tasks.classList.remove('opacity-75', 'pointer-events-none'); document.querySelector('.read-only-badge').style.display = 'none'; }
 }
+
+// 🆕 PERSISTENCE LOGIC: Loads from root doc if today's log missing
 function loadUserDataForDate(date) {
     if(unsubscribeSnapshot) unsubscribeSnapshot();
     const did = getFormattedDateID(date);
@@ -255,6 +253,7 @@ function loadUserDataForDate(date) {
         if(doc.exists) { lastUserData = doc.data(); renderMainUI(lastUserData); }
         else {
             if(isToday(date)) {
+                // Fetch saved settings from root
                 const root = await db.collection('users').doc(currentUser.uid).get();
                 const settings = root.data()?.habitSettings || DEFAULT_USER_DATA.habitSettings;
                 const tmpl = root.data()?.customAdhkarTemplates || [];
@@ -267,6 +266,7 @@ function loadUserDataForDate(date) {
         document.getElementById('user-avatar').innerText = name[0].toUpperCase();
     });
 }
+
 function renderMainUI(data) {
     const pc = document.getElementById('tasks-container'); pc.innerHTML = '';
     const pMap = { fajr:'الفجر', dhuhr:'الظهر', asr:'العصر', maghrib:'المغرب', isha:'العشاء' };
@@ -310,7 +310,6 @@ function updateDashboardStats(data) {
     const bar = document.getElementById('progress-bar-visual');
     if(bar) bar.style.width = p + '%';
     
-    // Message
     let msg = MESSAGES_DB.low;
     if(p >= 80) msg = MESSAGES_DB.high; else if(p >= 50) msg = MESSAGES_DB.medium;
     document.getElementById('feedback-title').innerText = msg.title;
@@ -318,19 +317,49 @@ function updateDashboardStats(data) {
     document.getElementById('feedback-link').href = msg.link;
 }
 
-// ... Actions, Settings, Reports ...
 function toggleTask(cat, k, v) { if(!isToday(currentDate)) return; const did = getFormattedDateID(currentDate); const up = {}; if(cat==='root') up[k]=v; else up[`${cat}.${k}`]=v; db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did).update(up); }
 async function incrementAdhkar(i) { if(!isToday(currentDate)) return; const did = getFormattedDateID(currentDate); const ref = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did); const doc = await ref.get(); const list = doc.data().customAdhkar; list[i].count++; ref.update({ customAdhkar: list }); }
 async function removeAdhkar(i) { if(!isToday(currentDate)) return; if(!confirm('حذف؟')) return; const root = db.collection('users').doc(currentUser.uid); const rd = await root.get(); const t = rd.data().customAdhkarTemplates || []; if(t[i]) { t.splice(i,1); root.update({customAdhkarTemplates:t}); } const did = getFormattedDateID(currentDate); const ref = root.collection('daily_logs').doc(did); const d = await ref.get(); const list = d.data().customAdhkar; list.splice(i,1); ref.update({ customAdhkar: list }); }
 function openManualCountModal(i) { currentAdhkarEditIndex=i; document.getElementById('manual-count-modal').classList.remove('hidden'); }
 async function saveManualCount() { const val = parseInt(document.getElementById('manual-count-input').value); if(val && currentAdhkarEditIndex!==null) { const did = getFormattedDateID(currentDate); const ref = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(did); const doc = await ref.get(); const list = doc.data().customAdhkar; list[currentAdhkarEditIndex].count += val; await ref.update({ customAdhkar: list }); } document.getElementById('manual-count-modal').classList.add('hidden'); }
-async function addNewDhikr() { if (!isToday(currentDate)) return; const name = document.getElementById('new-dhikr-name').value; const target = parseInt(document.getElementById('new-dhikr-target').value) || 100; if(!name) return alert("أدخل اسم الذكر"); const userRef = db.collection('users').doc(currentUser.uid); const userDoc = await userRef.get(); let templates = userDoc.data()?.customAdhkarTemplates || []; templates.push({ name, target }); await userRef.set({ customAdhkarTemplates: templates }, { merge: true }); const dateID = getFormattedDateID(currentDate); const docRef = userRef.collection('daily_logs').doc(dateID); const doc = await docRef.get(); let currentList = doc.exists ? (doc.data().customAdhkar || []) : []; currentList.push({ name, count: 0, target }); await docRef.update({ customAdhkar: currentList }); toggleAdhkarModal(); document.getElementById('new-dhikr-name').value = ''; }
+// 🆕 SAVE ADHKAR TO ROOT FOR PERSISTENCE
+async function addNewDhikr() { 
+    if (!isToday(currentDate)) return; 
+    const name = document.getElementById('new-dhikr-name').value; 
+    const target = parseInt(document.getElementById('new-dhikr-target').value) || 100; 
+    if(!name) return alert("أدخل اسم الذكر"); 
+    
+    // Save to root for future
+    const userRef = db.collection('users').doc(currentUser.uid);
+    const userDoc = await userRef.get();
+    let templates = userDoc.data()?.customAdhkarTemplates || [];
+    templates.push({ name, target });
+    await userRef.set({ customAdhkarTemplates: templates }, { merge: true });
+
+    // Update today
+    const dateID = getFormattedDateID(currentDate); 
+    const docRef = userRef.collection('daily_logs').doc(dateID); 
+    const doc = await docRef.get(); 
+    let currentList = doc.exists ? (doc.data().customAdhkar || []) : []; 
+    currentList.push({ name, count: 0, target }); 
+    await docRef.update({ customAdhkar: currentList }); 
+    toggleAdhkarModal(); document.getElementById('new-dhikr-name').value = ''; 
+}
 function toggleAdhkarModal(){ document.getElementById('adhkar-modal').classList.toggle('hidden'); }
 function toggleSettingsModal(){ const m=document.getElementById('settings-modal'); if(m.classList.contains('hidden')){ openSettingsModal(); } else { m.classList.add('hidden'); } }
 function openSettingsModal() { if (!lastUserData) return; const container = document.getElementById('settings-list'); container.innerHTML = ''; const settings = lastUserData.habitSettings || DEFAULT_USER_DATA.habitSettings; for (const [key, meta] of Object.entries(HABITS_META)) { const isChecked = settings[key] || false; container.innerHTML += `<div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg mb-2"><span class="text-sm font-bold text-gray-700">${meta.name}</span><input type="checkbox" class="setting-toggle" data-key="${key}" ${isChecked ? 'checked' : ''}></div>`; } document.getElementById('settings-modal').classList.remove('hidden'); }
-async function saveSettings() { if (!isToday(currentDate)) return alert("تعديل اليوم فقط"); const checkboxes = document.querySelectorAll('.setting-toggle'); const newSettings = { ... (lastUserData.habitSettings || {}) }; checkboxes.forEach(cb => { newSettings[cb.dataset.key] = cb.checked; }); await db.collection('users').doc(currentUser.uid).set({ habitSettings: newSettings }, { merge: true }); const dateID = getFormattedDateID(currentDate); db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID).update({ habitSettings: newSettings }).then(() => { document.getElementById('settings-modal').classList.add('hidden'); }); }
+// 🆕 SAVE SETTINGS TO ROOT FOR PERSISTENCE
+async function saveSettings() { 
+    if (!isToday(currentDate)) return alert("تعديل اليوم فقط"); 
+    const checkboxes = document.querySelectorAll('.setting-toggle'); 
+    const newSettings = { ... (lastUserData.habitSettings || {}) }; 
+    checkboxes.forEach(cb => { newSettings[cb.dataset.key] = cb.checked; }); 
+    await db.collection('users').doc(currentUser.uid).set({ habitSettings: newSettings }, { merge: true });
+    const dateID = getFormattedDateID(currentDate); 
+    db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID).update({ habitSettings: newSettings }).then(() => { document.getElementById('settings-modal').classList.add('hidden'); }); 
+}
 
-// === Simplified Reports (No Charts) ===
+// === REPORT LOGIC (TEXT ONLY) ===
 async function generateReport(period) {
     document.querySelectorAll('.report-tab').forEach(t => {
         if(t.dataset.period === period) { t.classList.replace('text-gray-600', 'text-[#047857]'); t.classList.add('bg-white', 'shadow-sm'); }
