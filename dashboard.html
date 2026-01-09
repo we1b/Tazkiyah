@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تزكية - لوحة التحكم</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #047857;
+            --gold: #D4AF37;
+            --bg: #F3F4F6;
+        }
+        body { font-family: 'Cairo', sans-serif; background-color: var(--bg); color: #1F2937; }
+        .bg-pattern { background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23047857' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+        
+        /* Checkbox Styles */
+        .custom-checkbox { appearance: none; width: 1.5em; height: 1.5em; border: 2px solid #D1D5DB; border-radius: 0.5em; display: grid; place-content: center; cursor: pointer; transition: 0.2s; background: white; }
+        .custom-checkbox::before { content: ""; width: 0.8em; height: 0.8em; transform: scale(0); box-shadow: inset 1em 1em white; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); transition: 0.1s; background-color: white; }
+        .custom-checkbox:checked { background: #047857; border-color: #047857; }
+        .custom-checkbox:checked::before { transform: scale(1); }
+
+        /* Toggle Switch */
+        .toggle-checkbox:checked { right: 0; border-color: #047857; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #047857; }
+        
+        /* Transitions */
+        .tab-content { display: none; animation: fadeIn 0.3s ease-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .nav-btn.active { background-color: #ECFDF5; color: #047857; }
+        .nav-btn.active i { color: #047857; }
+    </style>
+</head>
+<body class="bg-pattern min-h-screen flex text-gray-800 overflow-hidden">
+
+    <!-- Sidebar (Desktop) -->
+    <aside class="w-64 bg-white hidden md:flex flex-col border-l border-gray-200 shadow-sm relative z-20">
+        <div class="p-6 flex items-center justify-center border-b border-gray-100 h-20">
+            <h1 class="text-2xl font-bold text-[#047857] flex gap-2 items-center">
+                <i data-lucide="moon" class="text-[#D4AF37] fill-current"></i> تزكية
+            </h1>
+        </div>
+        
+        <nav class="flex-1 p-4 space-y-2 mt-4">
+            <button onclick="showTab('home')" id="nav-home" class="nav-btn active w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-right text-gray-600 hover:bg-gray-50">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> <span>اليومية</span>
+            </button>
+            <button onclick="showTab('reports')" id="nav-reports" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-right text-gray-600 hover:bg-gray-50">
+                <i data-lucide="bar-chart-2" class="w-5 h-5"></i> <span>التقارير</span>
+            </button>
+            <button onclick="openSettings()" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all text-right text-gray-600 hover:bg-gray-50">
+                <i data-lucide="settings" class="w-5 h-5"></i> <span>الإعدادات</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-gray-100">
+            <div class="bg-gray-50 p-3 rounded-xl flex items-center gap-3 border border-gray-100">
+                <div class="w-10 h-10 rounded-full bg-[#047857] text-white flex items-center justify-center font-bold text-lg">م</div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-bold text-gray-900 truncate">مصطفى</p>
+                    <p class="text-xs text-gray-500 truncate" id="location-display-sidebar">القاهرة، مصر</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        
+        <!-- Mobile Header -->
+        <header class="md:hidden bg-white p-4 border-b border-gray-200 flex justify-between items-center z-10 sticky top-0">
+            <h1 class="text-xl font-bold text-[#047857]">تزكية</h1>
+            <button class="p-2 bg-gray-50 rounded-lg text-gray-600"><i data-lucide="menu"></i></button>
+        </header>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 scroll-smooth">
+            
+            <!-- Greeting & Header -->
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-bold text-gray-800">أهلاً يا بطل 👋</h2>
+                    <p class="text-gray-500 mt-1 flex items-center gap-1 text-sm md:text-base">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-[#047857]"></i> 
+                        المواقيت حسب: <span class="font-bold text-[#047857]" id="location-display-header">القاهرة</span>
+                    </p>
+                </div>
+                <div class="hidden md:block text-left">
+                    <p class="text-xs text-gray-400">التاريخ الهجري</p>
+                    <p class="font-bold text-[#047857]">15 رمضان 1445</p>
+                </div>
+            </div>
+
+            <!-- TAB 1: HOME (DASHBOARD) -->
+            <div id="tab-home" class="tab-content active space-y-8">
+                
+                <!-- Progress Bar -->
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+                    <div class="flex justify-between items-end mb-3 relative z-10">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">إنجاز اليوم</h3>
+                            <p class="text-sm text-gray-500" id="progress-text">بداية موفقة.. استعن بالله 🌿</p>
+                        </div>
+                        <span class="text-3xl font-bold text-[#047857]" id="progress-percent">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-3 relative z-10 overflow-hidden">
+                        <div id="progress-bar" class="bg-[#047857] h-3 rounded-full transition-all duration-700 ease-out" style="width: 0%"></div>
+                    </div>
+                    <!-- Decor -->
+                    <div class="absolute -left-6 -bottom-6 w-32 h-32 bg-[#ECFDF5] rounded-full opacity-60 z-0"></div>
+                </section>
+
+                <!-- Section: Fundamentals (Prayers + Quran) -->
+                <section>
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-1 h-6 bg-[#047857] rounded-full"></div>
+                        <h3 class="text-xl font-bold text-gray-800">الأساسيات (الفرائض) 🕌</h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="prayers-container">
+                        <!-- Prayers Generated by JS -->
+                    </div>
+                </section>
+
+                <!-- Section: Flexible Habits -->
+                <section>
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-1 h-6 bg-[#D4AF37] rounded-full"></div>
+                            <h3 class="text-xl font-bold text-gray-800">السنن (مرنة) 🌱</h3>
+                        </div>
+                        <button onclick="openSettings()" class="text-xs font-bold text-[#047857] bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors border border-green-100 flex items-center gap-1">
+                            <i data-lucide="sliders-horizontal" class="w-3 h-3"></i> تعديل
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="habits-container">
+                        <!-- Habits Generated by JS -->
+                    </div>
+                    <div id="empty-habits-msg" class="hidden text-center p-8 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 text-sm bg-gray-50">
+                        لم تقم بتفعيل أي سنن. هذا جيد، ركز على الفرائض الآن! 👌
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 2: REPORTS -->
+            <div id="tab-reports" class="tab-content space-y-6">
+                <!-- Filters -->
+                <div class="bg-white p-1.5 rounded-xl inline-flex border border-gray-200 shadow-sm">
+                    <button class="px-6 py-2 rounded-lg bg-[#047857] text-white font-bold text-sm shadow-sm transition-all">يومي</button>
+                    <button class="px-6 py-2 rounded-lg text-gray-500 hover:bg-gray-50 font-bold text-sm transition-all">أسبوعي</button>
+                    <button class="px-6 py-2 rounded-lg text-gray-500 hover:bg-gray-50 font-bold text-sm transition-all">شهري</button>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="p-2 bg-green-50 text-[#047857] rounded-lg"><i data-lucide="check-circle"></i></div>
+                            <span class="text-gray-500 font-bold text-sm">التزام الصلوات</span>
+                        </div>
+                        <h4 class="text-3xl font-bold text-gray-800">92%</h4>
+                        <p class="text-xs text-green-600 mt-1 flex items-center gap-1"><i data-lucide="trending-up" class="w-3 h-3"></i> ممتاز هذا الأسبوع</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="p-2 bg-yellow-50 text-yellow-600 rounded-lg"><i data-lucide="book-open"></i></div>
+                            <span class="text-gray-500 font-bold text-sm">أيام القرآن</span>
+                        </div>
+                        <h4 class="text-3xl font-bold text-gray-800">5 <span class="text-sm text-gray-400 font-normal">/ 7 أيام</span></h4>
+                    </div>
+                </div>
+
+                <!-- Chart Placeholder -->
+                <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <h3 class="font-bold text-gray-700 mb-6">أداء الصلوات (آخر 7 أيام)</h3>
+                    <div class="h-48 flex items-end justify-between gap-2 sm:gap-4 px-2">
+                        <!-- Bars -->
+                        <div class="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                            <div class="w-full bg-[#047857] rounded-t-lg h-[80%] opacity-80 group-hover:opacity-100 transition-opacity relative">
+                                <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-[#047857] opacity-0 group-hover:opacity-100 transition-opacity">80%</span>
+                            </div>
+                            <span class="text-xs text-gray-400">السبت</span>
+                        </div>
+                        <div class="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                            <div class="w-full bg-[#047857] rounded-t-lg h-[100%] opacity-80 group-hover:opacity-100 transition-opacity relative">
+                                <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-[#047857] opacity-0 group-hover:opacity-100 transition-opacity">100%</span>
+                            </div>
+                            <span class="text-xs text-gray-400">الأحد</span>
+                        </div>
+                         <div class="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                            <div class="w-full bg-[#047857] rounded-t-lg h-[60%] opacity-80 group-hover:opacity-100 transition-opacity relative">
+                                <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-[#047857] opacity-0 group-hover:opacity-100 transition-opacity">60%</span>
+                            </div>
+                            <span class="text-xs text-gray-400">الاثنين</span>
+                        </div>
+                         <div class="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                            <div class="w-full bg-[#047857] rounded-t-lg h-[90%] opacity-80 group-hover:opacity-100 transition-opacity relative">
+                                <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-[#047857] opacity-0 group-hover:opacity-100 transition-opacity">90%</span>
+                            </div>
+                            <span class="text-xs text-gray-400 font-bold text-[#047857]">اليوم</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-[#ECFDF5]">
+                <h3 class="font-bold text-[#047857] text-lg flex items-center gap-2">
+                    <i data-lucide="settings" class="w-5 h-5"></i> الإعدادات
+                </h3>
+                <button onclick="closeSettings()" class="text-gray-400 hover:text-red-500 transition-colors bg-white rounded-full p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <div class="p-6 max-h-[60vh] overflow-y-auto space-y-6">
+                
+                <!-- Location Section -->
+                <div>
+                    <h4 class="font-bold text-gray-800 mb-3 text-sm">📍 الموقع والمواقيت</h4>
+                    <div class="relative">
+                        <select id="location-select" class="w-full p-3.5 pr-10 rounded-xl border border-gray-200 bg-gray-50 outline-none focus:border-[#047857] text-gray-700 font-semibold appearance-none">
+                            <option value="Cairo">مصر - القاهرة</option>
+                            <option value="Riyadh">السعودية - الرياض</option>
+                            <option value="Dubai">الإمارات - دبي</option>
+                            <option value="London">بريطانيا - لندن</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="absolute left-3 top-4 w-5 h-5 text-gray-400 pointer-events-none"></i>
+                    </div>
+                </div>
+
+                <hr class="border-gray-100">
+
+                <!-- Habits Section -->
+                <div>
+                    <h4 class="font-bold text-gray-800 mb-1 text-sm">🛠️ صمم يومك (السنن)</h4>
+                    <p class="text-xs text-gray-500 mb-4">فعل ما تستطيع المداومة عليه فقط.</p>
+                    
+                    <div class="space-y-3" id="settings-habits-list">
+                        <!-- Generated by JS -->
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button onclick="closeSettings()" class="px-5 py-2.5 rounded-xl text-gray-600 font-bold hover:bg-gray-200 transition-colors">إلغاء</button>
+                <button onclick="saveSettings()" class="px-6 py-2.5 rounded-xl bg-[#047857] text-white font-bold shadow-lg hover:bg-[#065f46] transition-all">حفظ التغييرات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Data
+        const prayersData = [
+            { id: 'fajr', name: 'الفجر', time: '04:50 ص', checked: false },
+            { id: 'dhuhr', name: 'الظهر', time: '12:05 م', checked: false },
+            { id: 'asr', name: 'العصر', time: '03:15 م', checked: false },
+            { id: 'maghrib', name: 'المغرب', time: '05:45 م', checked: false },
+            { id: 'isha', name: 'العشاء', time: '07:15 م', checked: false }
+        ];
+
+        let quranData = { checked: false };
+
+        // Habits: active = shown in dashboard, checked = done today
+        let habitsData = [
+            { id: 'sunan', name: 'السنن الرواتب', icon: 'layers', active: true, checked: false },
+            { id: 'duha', name: 'صلاة الضحى', icon: 'sun', active: true, checked: false },
+            { id: 'azkar_m', name: 'أذكار الصباح', icon: 'sunrise', active: true, checked: false },
+            { id: 'azkar_e', name: 'أذكار المساء', icon: 'sunset', active: true, checked: false },
+            { id: 'qiyam', name: 'قيام الليل', icon: 'moon', active: false, checked: false },
+            { id: 'witr', name: 'الوتر', icon: 'star', active: false, checked: false }
+        ];
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            renderDashboard();
+            renderSettings();
+        });
+
+        // --- Rendering Functions ---
+
+        function renderDashboard() {
+            // 1. Render Prayers
+            const prayersContainer = document.getElementById('prayers-container');
+            prayersContainer.innerHTML = '';
+            
+            prayersData.forEach((p, idx) => {
+                prayersContainer.innerHTML += `
+                    <div onclick="togglePrayer(${idx})" class="p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${p.checked ? 'bg-green-50 border-green-200 shadow-sm' : 'bg-white border-gray-200 hover:border-green-200'}">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" class="custom-checkbox pointer-events-none" ${p.checked ? 'checked' : ''}>
+                            <div>
+                                <h4 class="font-bold text-gray-800 ${p.checked ? 'text-[#047857]' : ''}">${p.name}</h4>
+                                <span class="text-xs text-gray-400 group-hover:text-[#047857] transition-colors">${p.time}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Add Quran Card (Always Fixed)
+            prayersContainer.innerHTML += `
+                <div onclick="toggleQuran()" class="relative overflow-hidden p-4 rounded-xl shadow-md cursor-pointer transition-transform hover:-translate-y-1 bg-gradient-to-br from-[#047857] to-[#064E3B] text-white flex justify-between items-center">
+                    <div class="relative z-10">
+                        <h4 class="font-bold text-lg">ورد القرآن</h4>
+                        <p class="text-xs text-green-100 opacity-90">${quranData.checked ? 'تم الورد، فتح الله عليك!' : 'صفحة واحدة لا تتركها'}</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full border-2 ${quranData.checked ? 'bg-white border-white' : 'border-white/30'} flex items-center justify-center relative z-10 transition-colors">
+                        ${quranData.checked ? '<i data-lucide="check" class="w-5 h-5 text-[#047857]"></i>' : ''}
+                    </div>
+                    <i data-lucide="book-open" class="absolute -left-2 -bottom-4 w-24 h-24 text-white opacity-10 rotate-12"></i>
+                </div>
+            `;
+
+            // 2. Render Habits (Only Active)
+            const habitsContainer = document.getElementById('habits-container');
+            habitsContainer.innerHTML = '';
+            
+            const activeHabits = habitsData.filter(h => h.active);
+            
+            if(activeHabits.length === 0) {
+                document.getElementById('empty-habits-msg').classList.remove('hidden');
+            } else {
+                document.getElementById('empty-habits-msg').classList.add('hidden');
+                activeHabits.forEach(h => {
+                    const originalIdx = habitsData.findIndex(item => item.id === h.id);
+                    habitsContainer.innerHTML += `
+                        <div onclick="toggleHabit(${originalIdx})" class="p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${h.checked ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-200 hover:border-yellow-300'}">
+                            <input type="checkbox" class="custom-checkbox pointer-events-none" ${h.checked ? 'checked' : ''}>
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-sm ${h.checked ? 'text-yellow-700' : ''}">${h.name}</h4>
+                                <span class="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                                    <i data-lucide="${h.icon}" class="w-3 h-3"></i> نافلة
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            // 3. Update Progress
+            updateProgress();
+            lucide.createIcons();
+        }
+
+        function renderSettings() {
+            const list = document.getElementById('settings-habits-list');
+            list.innerHTML = '';
+            
+            habitsData.forEach((h, idx) => {
+                list.innerHTML += `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-white p-2 rounded-lg shadow-sm text-gray-500">
+                                <i data-lucide="${h.icon}" class="w-4 h-4"></i>
+                            </div>
+                            <span class="font-bold text-gray-700 text-sm">${h.name}</span>
+                        </div>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="toggle" id="toggle-${idx}" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer" ${h.active ? 'checked' : ''} onchange="updateHabitStatus(${idx}, this.checked)"/>
+                            <label for="toggle-${idx}" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function updateProgress() {
+            const activeHabits = habitsData.filter(h => h.active);
+            const totalTasks = prayersData.length + 1 + activeHabits.length; // Prayers + Quran + Active Habits
+            
+            let completed = 0;
+            completed += prayersData.filter(p => p.checked).length;
+            completed += quranData.checked ? 1 : 0;
+            completed += activeHabits.filter(h => h.checked).length;
+            
+            const percent = Math.round((completed / totalTasks) * 100);
+            
+            document.getElementById('progress-bar').style.width = `${percent}%`;
+            document.getElementById('progress-percent').innerText = `${percent}%`;
+            
+            const textEl = document.getElementById('progress-text');
+            if (percent === 100) {
+                textEl.innerText = "ما شاء الله! يومك كامل 🌟";
+                textEl.className = "text-sm font-bold text-[#047857]";
+            } else {
+                 textEl.innerText = "بداية موفقة.. استعن بالله 🌿";
+                 textEl.className = "text-sm text-gray-500";
+            }
+        }
+
+        // --- Logic Handlers ---
+
+        function togglePrayer(idx) {
+            prayersData[idx].checked = !prayersData[idx].checked;
+            renderDashboard();
+        }
+        
+        function toggleQuran() {
+            quranData.checked = !quranData.checked;
+            renderDashboard();
+        }
+
+        function toggleHabit(idx) {
+            habitsData[idx].checked = !habitsData[idx].checked;
+            renderDashboard();
+        }
+
+        // --- Settings Logic ---
+
+        function updateHabitStatus(idx, isActive) {
+            habitsData[idx].active = isActive;
+            if(!isActive) habitsData[idx].checked = false; // Reset checked if disabled
+        }
+
+        function openSettings() {
+            renderSettings(); // Re-render to ensure state is correct
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function saveSettings() {
+            // Update Location Text
+            const location = document.getElementById('location-select');
+            const locationName = location.options[location.selectedIndex].text.split('-')[1].trim();
+            document.getElementById('location-display-header').innerText = locationName;
+            document.getElementById('location-display-sidebar').innerText = locationName;
+            
+            // Re-render dashboard with new settings
+            renderDashboard();
+            closeSettings();
+        }
+
+        // --- Tab Navigation ---
+
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            // Deactivate buttons
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            
+            // Show Target
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            document.getElementById(`nav-${tabName}`).classList.add('active');
+            
+            // Mobile Menu handling (optional: close menu if open)
+        }
+
+    </script>
+</body>
+</html>

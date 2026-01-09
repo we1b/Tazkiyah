@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تزكية - تسجيل الدخول</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #F3F4F6; }
+        .bg-pattern { background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23047857' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+    </style>
+</head>
+<body class="bg-pattern min-h-screen flex items-center justify-center p-4">
+
+    <!-- Login Card -->
+    <div class="bg-white w-full max-w-md p-8 sm:p-10 rounded-3xl shadow-2xl border border-gray-100 relative overflow-hidden">
+        
+        <!-- Decoration Header -->
+        <div class="absolute top-0 left-0 w-full h-2 bg-[#047857]"></div>
+
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-green-50 rounded-2xl mb-4 text-[#047857]">
+                <i data-lucide="user" class="w-8 h-8"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">تسجيل الدخول</h1>
+            <p class="text-gray-500 mt-2 text-sm">أهلاً بعودتك، تابع وردك اليومي 🌿</p>
+        </div>
+
+        <form onsubmit="event.preventDefault(); window.location.href='dashboard.html'" class="space-y-5">
+            <div>
+                <label class="block text-gray-700 font-bold mb-2 text-sm">البريد الإلكتروني</label>
+                <div class="relative">
+                    <input type="email" placeholder="name@example.com" class="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#047857] focus:ring-2 focus:ring-green-100 outline-none transition-all pl-10" required>
+                    <i data-lucide="mail" class="absolute left-3 top-4 text-gray-400 w-5 h-5"></i>
+                </div>
+            </div>
+
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-gray-700 font-bold text-sm">كلمة المرور</label>
+                    <a href="#" class="text-xs text-[#047857] font-bold hover:underline">نسيت كلمة المرور؟</a>
+                </div>
+                <div class="relative">
+                    <input type="password" placeholder="••••••••" class="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#047857] focus:ring-2 focus:ring-green-100 outline-none transition-all pl-10" required>
+                    <i data-lucide="lock" class="absolute left-3 top-4 text-gray-400 w-5 h-5"></i>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 mt-4">
+                دخول
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </button>
+        </form>
+
+        <div class="mt-8 pt-6 border-t border-gray-100 text-center text-gray-500 text-sm">
+            ليس لديك حساب بعد؟ <a href="#" class="text-[#047857] font-bold hover:underline transition-colors">إنشاء حساب جديد</a>
+        </div>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>
