@@ -1,7 +1,11 @@
 const USE_REAL_FIREBASE = true;
 
+// ============================================================
+// ⚠️ هام جداً: استبدل البيانات التالية ببيانات مشروعك من Firebase
+// لكي يتم حفظ بيانات المستخدمين بشكل دائم وحقيقي.
+// ============================================================
 const firebaseConfig = {
-    apiKey: "AIzaSyDr1bE57IpBPNz0qCCgb-RxLqsnJ0qPrUw",
+    apiKey: "AIzaSyDr1bE57IpBPNz0qCCgb-RxLqsnJ0qPrUw", // ضع هنا API Key الخاص بك
     authDomain: "tazkiah-app-33b52.firebaseapp.com",
     projectId: "tazkiah-app-33b52",
     storageBucket: "tazkiah-app-33b52.firebasestorage.app",
