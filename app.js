@@ -15,7 +15,7 @@ let currentUser = null;
 let unsubscribeSnapshot = null;
 let performanceChartInstance = null;
 let lastUserData = null; 
-let globalUserSettings = null; // لتخزين الإعدادات المفضلة الدائمة
+let globalUserSettings = null; 
 let currentDate = new Date();
 
 // === متغيرات المواقيت والقرآن ===
@@ -39,7 +39,6 @@ const DEFAULT_USER_DATA = {
     prayers: { fajr: false, dhuhr: false, asr: false, maghrib: false, isha: false },
     quran: false,
     habits: { rawatib: false, duha: false, witr: false, azkar_m: false, azkar_e: false, azkar_s: false, fasting_mon: false, fasting_thu: false },
-    // الإعدادات الافتراضية ستتحدث من إعدادات المستخدم المحفوظة
     habitSettings: { rawatib: true, duha: true, witr: true, azkar_m: true, azkar_e: true, azkar_s: true },
     customAdhkar: [] 
 };
@@ -67,9 +66,10 @@ function initApp() {
             showScreen('app-screen');
             currentDate = new Date();
             
-            // تحميل الإعدادات المحفوظة للمستخدم أولاً
+            // إظهار رسالة ترحيب لطيفة
+            showToast(`أهلاً بك مجدداً يا ${user.displayName || 'بطل'} 🌿`);
+
             await loadGlobalSettings();
-            
             loadUserDataForDate(currentDate);
             injectSettingsUI();
             injectMobileNav();
@@ -83,7 +83,25 @@ function initApp() {
     });
 }
 
-// تحميل إعدادات المستخدم الدائمة (لتطبيقها على الأيام الجديدة)
+// === Toast Notification Logic (الرسالة اللطيفة) ===
+function showToast(message) {
+    let toast = document.getElementById('toast-notification');
+    if (!toast) return;
+    
+    // إعداد النص
+    toast.innerHTML = `<i data-lucide="smile" class="w-5 h-5"></i> <span>${message}</span>`;
+    lucide.createIcons();
+    
+    // إظهار الرسالة
+    toast.classList.remove('translate-y-[-150%]', 'opacity-0');
+    
+    // إخفاء بعد 4 ثواني
+    setTimeout(() => {
+        toast.classList.add('translate-y-[-150%]', 'opacity-0');
+    }, 4000);
+}
+
+// تحميل إعدادات المستخدم الدائمة
 async function loadGlobalSettings() {
     try {
         const doc = await db.collection('users').doc(currentUser.uid).get();
@@ -181,7 +199,7 @@ function playAdhan(prayerName) {
     adhanAudio.play().catch(e => console.log("Audio play failed"));
     if (Notification.permission === "granted") new Notification(`حان الآن موعد صلاة ${prayerName}`);
     else if (Notification.permission !== "denied") Notification.requestPermission();
-    alert(`📢 حان الآن موعد صلاة ${prayerName}`);
+    showToast(`📢 حان الآن موعد صلاة ${prayerName}`);
 }
 
 // === 2. Quran Module ===
@@ -333,7 +351,6 @@ function loadUserDataForDate(date) {
                 updateDashboardStats(data);
             } else {
                 if (isToday(date)) {
-                    // إنشاء يوم جديد: استخدام الإعدادات المفضلة إذا وجدت
                     const initialData = JSON.parse(JSON.stringify(DEFAULT_USER_DATA));
                     if (globalUserSettings) {
                         initialData.habitSettings = globalUserSettings;
@@ -403,7 +420,7 @@ function renderTasks(data) {
     updatePrayerUI();
 }
 
-// === Adhkar Logic (Edited: Manual Input) ===
+// === Adhkar Logic (Edited: Manual Input & Auto Increment) ===
 function renderAdhkar(list) {
     const container = document.getElementById('adhkar-container');
     if(!container) return;
@@ -413,7 +430,6 @@ function renderAdhkar(list) {
         total += parseInt(item.count) || 0;
         const progress = Math.min((item.count / (item.target || 100)) * 100, 100);
         
-        // التعديل هنا: إضافة Input للرقم
         container.innerHTML += `
             <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group">
                 <div class="flex justify-between items-start mb-2 relative z-10">
@@ -422,14 +438,14 @@ function renderAdhkar(list) {
                 </div>
                 <div class="flex justify-between items-end relative z-10 mt-2">
                     <div class="flex items-baseline gap-1">
-                        <!-- حقل الإدخال اليدوي -->
+                        <!-- حقل الإدخال: يمكن الكتابة فيه مباشرة -->
                         <input type="number" value="${item.count}" 
                             onchange="updateAdhkarCount(${index}, this.value)"
                             class="text-3xl font-bold text-blue-600 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-600 focus:outline-none w-24 p-0 m-0"
                             placeholder="0">
                     </div>
-                    <!-- زر الزيادة السريعة -->
-                    <button onclick="incrementAdhkar(${index})" class="click-anim w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-lg shadow-blue-200">
+                    <!-- زر الزيادة: يرفع الرقم تلقائياً عند الضغط عليه -->
+                    <button onclick="incrementAdhkar(${index})" class="click-anim w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-95 transition-transform">
                         <i data-lucide="plus" class="w-6 h-6"></i>
                     </button>
                 </div>
@@ -497,7 +513,7 @@ async function removeAdhkar(index) {
 }
 function toggleAdhkarModal() { document.getElementById('adhkar-modal').classList.toggle('hidden'); }
 
-// === Settings Logic (Edited: Persistence) ===
+// === Settings Logic ===
 function injectSettingsUI() {
     const sidebarNav = document.querySelector('aside .flex-1.space-y-3');
     if (sidebarNav && !document.getElementById('btn-settings-sidebar')) {
@@ -559,26 +575,23 @@ function openSettingsModal() {
 function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
 
 async function saveSettings() {
-    // 1. Update current day logic
     const checkboxes = document.querySelectorAll('.setting-toggle');
     const newSettings = { ... (lastUserData.habitSettings || {}) };
     checkboxes.forEach(cb => { newSettings[cb.dataset.key] = cb.checked; });
     
-    // Save to current day doc (if exists and is today)
     if (isToday(currentDate)) {
         const dateID = getFormattedDateID(currentDate);
         await db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID).update({ habitSettings: newSettings });
     }
 
-    // 2. Save as Global Defaults (Persistence)
     await db.collection('users').doc(currentUser.uid).set({ defaultSettings: newSettings }, { merge: true });
-    globalUserSettings = newSettings; // Update local cache
+    globalUserSettings = newSettings; 
 
-    alert("تم حفظ التعديلات وتثبيتها للأيام القادمة ✅");
+    showToast("تم حفظ التعديلات وتثبيتها للأيام القادمة ✅");
     closeSettingsModal();
 }
 
-// === Chart & Report Logic (Edited: Weekly/Monthly) ===
+// === Chart & Report Logic ===
 function initChart() {
     const ctx = document.getElementById('performanceChart');
     if(!ctx) return;
@@ -614,7 +627,6 @@ function openReportModal() {
     document.getElementById('report-percent').innerText = percent;
     document.getElementById('report-adhkar').innerText = totalAdhkar;
     
-    // Fill daily list
     const listEl = document.getElementById('report-tasks-list');
     listEl.innerHTML = '';
     if(lastUserData) {
@@ -628,13 +640,11 @@ function openReportModal() {
     document.getElementById('report-modal').classList.remove('hidden');
 }
 
-// === Generate Period Reports (Weekly/Monthly) ===
 async function exportPeriodReport(days) {
     const btnText = days === 7 ? 'تقرير أسبوعي' : 'تقرير شهري';
     if(!confirm(`هل تريد استخراج ${btnText} بناءً على الأيام المسجلة؟`)) return;
 
     try {
-        // Fetch last X logs (approximate by limit)
         const snapshot = await db.collection('users').doc(currentUser.uid)
             .collection('daily_logs')
             .orderBy(firebase.firestore.FieldPath.documentId(), 'desc')
@@ -652,24 +662,20 @@ async function exportPeriodReport(days) {
             const data = doc.data();
             const dateID = doc.id;
             
-            // Calculate Stats for this day
             let totalTasks = 0, doneTasks = 0;
             if (data.prayers) Object.values(data.prayers).forEach(v => { totalTasks++; if(v) doneTasks++; });
             const quranDone = (typeof data.quran !== 'undefined') ? data.quran : (data.habits?.quran || false);
             totalTasks++; if(quranDone) doneTasks++;
-            // Habits
             const habits = data.habits || {};
-            const settings = data.habitSettings || {}; // Use settings of that specific day
+            const settings = data.habitSettings || {}; 
             for(const hKey in habits) {
                 if(settings[hKey] && HABITS_META[hKey]) {
                     totalTasks++;
                     if(habits[hKey]) doneTasks++;
                 }
             }
-            
             const dayPercent = totalTasks === 0 ? 0 : Math.round((doneTasks/totalTasks)*100);
             
-            // Adhkar Sum
             let adhkarSum = 0;
             (data.customAdhkar || []).forEach(a => adhkarSum += (a.count || 0));
 
@@ -681,23 +687,18 @@ async function exportPeriodReport(days) {
 
         rows.push([], ["المتوسط العام", `${Math.round(totalPercent/count)}%`, "-"]);
 
-        // Export Excel
         const ws = XLSX.utils.aoa_to_sheet(rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Period Report");
         XLSX.writeFile(wb, `Tazkiyah_Report_${days}Days_${Date.now()}.xlsx`);
 
-    } catch (e) {
-        console.error(e);
-        alert("حدث خطأ أثناء جلب البيانات: " + e.message);
-    }
+    } catch (e) { console.error(e); alert("حدث خطأ أثناء جلب البيانات."); }
 }
 
 function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
 function downloadAsImage() { const e=document.getElementById('report-preview-content'); html2canvas(e).then(c=>{const l=document.createElement('a'); l.download=`Report-${Date.now()}.png`; l.href=c.toDataURL(); l.click();}); }
 function downloadAsPDF() { const e=document.getElementById('report-preview-content'); const {jsPDF}=window.jspdf; html2canvas(e).then(c=>{const i=c.toDataURL('image/png'); const p=new jsPDF('p','mm','a4'); const w=p.internal.pageSize.getWidth(); const h=(c.height*w)/c.width; p.addImage(i,'PNG',0,10,w,h); p.save(`Report-${Date.now()}.pdf`);}); }
 function downloadAsExcel() {
-    // Current Day Excel
     if(!lastUserData) return;
     const rows = [["تقرير تزكية اليومي"],["التاريخ", getReadableDate(currentDate)],["النسبة", document.getElementById('chart-percent').innerText],[],["العبادة","الحالة"]];
     const pNames = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
