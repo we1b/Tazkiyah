@@ -450,9 +450,9 @@ function renderAdhkar(list) {
                             class="text-3xl font-bold text-blue-600 bg-transparent border-b-2 border-gray-200 hover:border-blue-400 focus:border-blue-600 focus:outline-none w-24 p-0 m-0 transition-colors"
                             placeholder="0">
                     </div>
-                    <!-- زر الزيادة: يرفع الرقم تلقائياً عند الضغط عليه -->
+                    <!-- زر الزيادة: يرفع الرقم تلقائياً عند الضغط عليه (تم تغيير الأيقونة لقلب) -->
                     <button onclick="incrementAdhkar(${index})" class="click-anim w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-95 transition-transform">
-                        <i data-lucide="plus" class="w-6 h-6"></i>
+                        <i data-lucide="heart" class="w-6 h-6"></i>
                     </button>
                 </div>
                 <div class="absolute bottom-0 left-0 h-1.5 bg-blue-100 w-full"><div class="h-full bg-blue-500 transition-all duration-300" style="width: ${progress}%"></div></div>
