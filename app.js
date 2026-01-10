@@ -446,7 +446,8 @@ function renderAdhkar(list) {
                         <!-- حقل الإدخال: يمكن الكتابة فيه مباشرة -->
                         <input type="number" value="${countVal}" 
                             onchange="updateAdhkarCount(${index}, this.value)"
-                            class="text-3xl font-bold text-blue-600 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-600 focus:outline-none w-24 p-0 m-0"
+                            onkeydown="if(event.key === 'Enter') this.blur()"
+                            class="text-3xl font-bold text-blue-600 bg-transparent border-b-2 border-gray-200 hover:border-blue-400 focus:border-blue-600 focus:outline-none w-24 p-0 m-0 transition-colors"
                             placeholder="0">
                     </div>
                     <!-- زر الزيادة: يرفع الرقم تلقائياً عند الضغط عليه -->
