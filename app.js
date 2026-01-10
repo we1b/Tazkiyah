@@ -420,17 +420,22 @@ function renderTasks(data) {
     updatePrayerUI();
 }
 
-// === Adhkar Logic (Edited: Manual Input & Auto Increment) ===
+// === Adhkar Logic (Edited: FIXED Increment & String Concatenation Issue) ===
 function renderAdhkar(list) {
     const container = document.getElementById('adhkar-container');
     if(!container) return;
-    container.innerHTML = '';
+    
     let total = 0;
+    let html = '';
+
     list.forEach((item, index) => {
-        total += parseInt(item.count) || 0;
-        const progress = Math.min((item.count / (item.target || 100)) * 100, 100);
+        // Ensure count is a number for math logic
+        let countVal = parseInt(item.count) || 0;
+        total += countVal;
         
-        container.innerHTML += `
+        const progress = Math.min((countVal / (item.target || 100)) * 100, 100);
+        
+        html += `
             <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group">
                 <div class="flex justify-between items-start mb-2 relative z-10">
                     <div><h4 class="font-bold text-gray-800 text-lg">${item.name}</h4><span class="text-xs text-gray-400">الهدف: ${item.target}</span></div>
@@ -439,7 +444,7 @@ function renderAdhkar(list) {
                 <div class="flex justify-between items-end relative z-10 mt-2">
                     <div class="flex items-baseline gap-1">
                         <!-- حقل الإدخال: يمكن الكتابة فيه مباشرة -->
-                        <input type="number" value="${item.count}" 
+                        <input type="number" value="${countVal}" 
                             onchange="updateAdhkarCount(${index}, this.value)"
                             class="text-3xl font-bold text-blue-600 bg-transparent border-b border-transparent hover:border-blue-200 focus:border-blue-600 focus:outline-none w-24 p-0 m-0"
                             placeholder="0">
@@ -452,6 +457,8 @@ function renderAdhkar(list) {
                 <div class="absolute bottom-0 left-0 h-1.5 bg-blue-100 w-full"><div class="h-full bg-blue-500 transition-all duration-300" style="width: ${progress}%"></div></div>
             </div>`;
     });
+
+    container.innerHTML = html;
     const totalEl = document.getElementById('total-adhkar-count');
     if(totalEl) totalEl.innerText = total;
     lucide.createIcons();
@@ -474,6 +481,7 @@ async function addNewDhikr() {
     const docRef = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID);
     const doc = await docRef.get();
     let currentList = doc.exists ? (doc.data().customAdhkar || []) : [];
+    // Ensure new items have numeric count
     currentList.push({ name, count: 0, target });
     await docRef.update({ customAdhkar: currentList });
     toggleAdhkarModal();
@@ -497,7 +505,11 @@ async function incrementAdhkar(index) {
     const docRef = db.collection('users').doc(currentUser.uid).collection('daily_logs').doc(dateID);
     const doc = await docRef.get();
     let list = doc.data().customAdhkar;
-    list[index].count += 1;
+    
+    // FIX: Force numeric addition to prevent string concatenation (e.g., "1" + 1 = "11")
+    let currentCount = parseInt(list[index].count) || 0;
+    list[index].count = currentCount + 1;
+    
     await docRef.update({ customAdhkar: list });
 }
 
